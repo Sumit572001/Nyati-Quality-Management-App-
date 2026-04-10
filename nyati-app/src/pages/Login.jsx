@@ -1,0 +1,107 @@
+import { useState } from 'react'
+import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
+
+const BASE_URL = 'http://192.168.12.93:5000'
+
+function Login() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+
+  const checkLogin = async () => {
+    if (!username || !password) return alert('Username aur Password dono bharo!')
+    setLoading(true)
+    try {
+      const res = await axios.post(`${BASE_URL}/api/login`, { username, password })
+
+      if (res.data.success) {
+        const userData = {
+          fullName: res.data.fullName,
+          role: res.data.role,
+          siteName: res.data.siteName,
+          block: res.data.block,
+          floor: res.data.floor,
+          initials: res.data.fullName
+            ? res.data.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+            : 'US'
+        }
+
+        // ✅ localStorage mein save karo
+        localStorage.setItem('nyati_user', JSON.stringify(userData))
+
+        // ✅ Role ke hisab se navigate karo
+        if (res.data.role === 'SE') navigate('/se')
+        else if (res.data.role === 'QE') navigate('/qe')
+        else if (res.data.role === 'HOD') navigate('/hod')
+        else if (res.data.role === 'ADMIN') navigate('/admin')
+        else alert('Unknown role: ' + res.data.role)
+      } else {
+        alert('Galat Password ya ID hai!')
+      }
+    } catch (err) {
+      console.error("Login error:", err)
+      alert('Server connect nahi ho raha!')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-[#eef2f3] flex items-center justify-center px-4">
+      <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-sm text-center">
+        
+        {/* Logo */}
+        <div className="flex justify-center mb-2">
+          <img 
+            src="https://www.nyatigroup.com/Nyati-logo-seo.png" 
+            alt="Nyati Logo" 
+            className="h-12 w-auto"
+            onError={(e) => { e.target.style.display = 'none' }}
+          />
+        </div>
+
+        <h1 className="text-2xl font-bold text-[#004080]">NYATI</h1>
+        <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest mb-2">Quality Application</p>
+        <hr className="mb-6 border-gray-100" />
+
+        <h2 className="text-base font-semibold text-gray-700 mb-6">User Login</h2>
+
+        <div className="text-left mb-3">
+          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Username</label>
+          <input
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-200 rounded-lg mt-1 text-sm focus:outline-none focus:border-[#004080] bg-gray-50"
+          />
+        </div>
+
+        <div className="text-left mb-6">
+          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Password</label>
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && checkLogin()}
+            className="w-full px-4 py-3 border border-gray-200 rounded-lg mt-1 text-sm focus:outline-none focus:border-[#004080] bg-gray-50"
+          />
+        </div>
+
+        <button
+          onClick={checkLogin}
+          disabled={loading}
+          className="w-full py-3 bg-[#004080] text-white font-bold rounded-lg hover:bg-blue-900 transition disabled:opacity-60 uppercase tracking-widest text-sm"
+        >
+          {loading ? 'Signing in...' : 'SIGN IN'}
+        </button>
+
+        <p className="text-[9px] text-gray-300 mt-6">© 2026 Nyati Group | All Rights Reserved</p>
+      </div>
+    </div>
+  )
+}
+
+export default Login
