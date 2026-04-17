@@ -135,9 +135,9 @@ function QEIndex() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('nyati_user');
-    window.location.href = '/'; 
-  }
+  localStorage.removeItem('nyati_user')
+  window.location.href = '/' // Simple redirect
+}
 
   const submitFinalDecision = async () => {
     if (!selectedReport) return;

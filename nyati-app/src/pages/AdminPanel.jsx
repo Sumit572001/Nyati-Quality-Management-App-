@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom' // ✅ Navigation ke liye add kiya
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faTrash } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faTrash, faSignOutAlt } from '@fortawesome/free-solid-svg-icons' // ✅ Logout icon add kiya
 
-const BASE_URL = 'http://localhost:5000'
+// AdminPanel.jsx mein ye update karein
+const BASE_URL = 'http://192.168.12.93:5000'
 
 function AdminPanel() {
   const [category, setCategory] = useState('Column')
   const [question, setQuestion] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  const navigate = useNavigate() // ✅ Navigate function initialize kiya
+
+  // ✅ Logout Function: Jo storage clear karke login page pe bhej dega
+  const handleLogout = () => {
+    if (window.confirm('Kya aap logout karna chahte hain?')) {
+      localStorage.removeItem('nyati_user') // User data delete karein
+      navigate('/') // Login page par bhejein
+    }
+  }
 
   // 1. Items load karne ka function
   const loadItems = async () => {
@@ -34,7 +45,7 @@ function AdminPanel() {
         questionText: question 
       })
       if (res.data.success) {
-        alert('Mubarak ho! Point add ho gaya.')
+        alert('New Checklist Added.')
         setQuestion('') // Input box khaali karne ke liye
         loadItems() // List ko refresh karne ke liye taaki naya item neeche dikh jaye
       }
@@ -65,10 +76,21 @@ function AdminPanel() {
     <div className="min-h-screen bg-[#f4f7f9] py-10 px-4">
       <div className="bg-white p-6 rounded-2xl max-w-2xl mx-auto shadow-md">
 
-        {/* Header */}
-        <h2 className="text-xl font-bold text-[#004080] border-b-2 border-[#E76F2E] pb-3 mb-5">
-          Checklist Admin Panel
-        </h2>
+        {/* Header with Logout Button */}
+        <div className="flex justify-between items-center border-b-2 border-[#E76F2E] pb-3 mb-5">
+          <h2 className="text-xl font-bold text-[#004080]">
+            Checklist Admin Panel
+          </h2>
+          
+          {/* ✅ LOGOUT BUTTON ADD KIYA */}
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-600 hover:text-white transition-all border border-red-100"
+          >
+            <FontAwesomeIcon icon={faSignOutAlt} />
+            LOGOUT
+          </button>
+        </div>
 
         {/* Add New Item Section */}
         <div className="mb-6">

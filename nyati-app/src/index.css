@@ -1,3 +1,48 @@
+/* Tailwind CSS Base Rules */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom Styles for Nyati App */
+:root {
+  --primary-blue: #004080;
+  --accent-orange: #E76F2E;
+  --bg-light: #f4f7f9;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-light);
+}
+
+/* Custom Scrollbar for Checklist Items */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Logout Button Hover Effect */
+.logout-btn-transition {
+  transition: all 0.3s ease;
+}
+
+/* Admin Panel Card Shadow */
+.admin-card {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}

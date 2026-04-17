@@ -17,6 +17,7 @@ function Login() {
       const res = await axios.post(`${BASE_URL}/api/login`, { username, password })
 
       if (res.data.success) {
+        // Aapka existing data structure
         const userData = {
           fullName: res.data.fullName,
           role: res.data.role,
@@ -31,12 +32,20 @@ function Login() {
         // ✅ localStorage mein save karo
         localStorage.setItem('nyati_user', JSON.stringify(userData))
 
-        // ✅ Role ke hisab se navigate karo
-        if (res.data.role === 'SE') navigate('/se')
-        else if (res.data.role === 'QE') navigate('/qe')
-        else if (res.data.role === 'HOD') navigate('/hod')
-        else if (res.data.role === 'ADMIN') navigate('/admin')
-        else alert('Unknown role: ' + res.data.role)
+        // ✅ LOGIN SUCCESS HONE KE BAAD KA LOGIC (ADD KIYA GAYA)
+        // Hum res.data.role use kar rahe hain kyunki aapka backend wahi bhej raha hai
+        if (res.data.role === 'ADMIN') {
+          navigate('/admin'); // Admin ko checklist page pe bhejo
+        } else if (res.data.role === 'SE') {
+          navigate('/se');
+        } else if (res.data.role === 'QE') {
+          navigate('/qe');
+        } else if (res.data.role === 'HOD') {
+          navigate('/hod');
+        } else {
+          alert('Unknown role: ' + res.data.role)
+        }
+
       } else {
         alert('Galat Password ya ID hai!')
       }

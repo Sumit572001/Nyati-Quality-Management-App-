@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import SEIndex from './pages/SEIndex'
 import QEIndex from './pages/QEIndex'
+// ✅ AdminPanel import ho raha hai aapke pages folder se
 import AdminPanel from './pages/AdminPanel'
 
 function ProtectedRoute({ children, allowedRole }) {
@@ -25,22 +26,33 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* 1. Login Page */}
         <Route path="/" element={<LoginRoute />} />
+
+        {/* 2. Site Engineer Route */}
         <Route path="/se" element={
           <ProtectedRoute allowedRole="SE">
             <SEIndex />
           </ProtectedRoute>
         } />
+
+        {/* 3. Quality Engineer Route */}
         <Route path="/qe" element={
           <ProtectedRoute allowedRole="QE">
             <QEIndex />
           </ProtectedRoute>
         } />
+
+        {/* 4. ✅ ADMIN PANEL PERMANENT ROUTE (Jo aapne manga tha) */}
+        {/* Isko access karne ke liye user ka role 'ADMIN' hona zaroori hai */}
         <Route path="/admin" element={
           <ProtectedRoute allowedRole="ADMIN">
             <AdminPanel />
           </ProtectedRoute>
         } />
+
+        {/* 5. Catch-all: Agar koi galat link ho toh Login pe wapas */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

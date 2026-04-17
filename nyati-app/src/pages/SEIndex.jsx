@@ -183,9 +183,9 @@ const downloadExcel = () => {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('nyati_user');
-    window.location.href = '/';
-  }
+  localStorage.removeItem('nyati_user')
+  window.location.href = '/' // Simple redirect
+}
 
   const openReworkForm = (item, reportId, itemIndexInReport) => {
     setSelectedRework({ ...item, reportId, itemIndexInReport });
