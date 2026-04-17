@@ -16,7 +16,7 @@ function AdminPanel() {
 
   // ✅ Logout Function: Jo storage clear karke login page pe bhej dega
   const handleLogout = () => {
-    if (window.confirm('Kya aap logout karna chahte hain?')) {
+    if (window.confirm('Do you want to logout?')) {
       localStorage.removeItem('nyati_user') // User data delete karein
       navigate('/') // Login page par bhejein
     }
@@ -29,7 +29,7 @@ function AdminPanel() {
       // Server se data milte hi items state update hogi aur screen pe dikhne lagega
       setItems(res.data)
     } catch (err) {
-      console.error('Items load nahi hue:', err)
+      console.error('Failed to load items!', err)
     }
   }
 
@@ -37,7 +37,7 @@ function AdminPanel() {
 
   // 2. Naya Item Add karne ka function
   const addItem = async () => {
-    if (!question.trim()) return alert('Question bharo pehle!')
+    if (!question.trim()) return alert('Fill Question')
     setLoading(true)
     try {
       const res = await axios.post(`${BASE_URL}/api/add-checklist-item`, { 
@@ -50,7 +50,7 @@ function AdminPanel() {
         loadItems() // List ko refresh karne ke liye taaki naya item neeche dikh jaye
       }
     } catch (err) {
-      alert('Server connect nahi ho raha!')
+      alert('Server is not responding. Please check your connection.')
     }
     setLoading(false)
   }
@@ -58,7 +58,7 @@ function AdminPanel() {
   // 3. Item Delete karne ka function
   const deleteItem = async (itemId) => {
     if (!itemId) return alert("Item ID nahi mili!");
-    if (!window.confirm('Kya aap sach mein ise delete karna chahte hain?')) return;
+    if (!window.confirm('Are you sure you want to delete this item?')) return;
     
     try {
       const res = await axios.delete(`${BASE_URL}/api/delete-checklist-item/${itemId}`);
@@ -68,7 +68,7 @@ function AdminPanel() {
       }
     } catch (err) {
       console.error("Delete Error:", err);
-      alert('Delete karne mein error aaya! Check karein backend mein delete route hai ya nahi.');
+      alert('Failed to delete item. Backend connection error.');
     }
   }
 
