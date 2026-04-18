@@ -70,9 +70,8 @@ function Login() {
           />
         </div>
 
-        <h1 className="text-2xl font-bold text-[#004080]">NYATI</h1>
-        <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest mb-2">Quality Application</p>
-        <hr className="mb-6 border-gray-100" />
+        <h1 className="text-lg font-black text-[#004080] mt-4 uppercase tracking-normal">NECPL Quality Application</h1>
+        <hr className="mt-4 mb-6 border-gray-100" />
 
         <h2 className="text-base font-semibold text-gray-700 mb-6">User Login</h2>
 

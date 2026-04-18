@@ -9,6 +9,10 @@ import {
 
 const BASE_URL = 'http://192.168.12.93:5000'
 
+const buildingOptions = [];
+const floorOptions = [];
+const unitTypeOptions = [];
+
 function SEIndex() {
   const user = JSON.parse(localStorage.getItem('nyati_user') || '{}')
   const currentUser = user.fullName || 'SE User' 
@@ -34,10 +38,11 @@ function SEIndex() {
   const [categorySelection, setCategorySelection] = useState({});
 
   const [spotData, setSpotData] = useState({
-    buildingArea: '',
-    floorLevel: '',
-    locationUnit: ''
-  })
+  buildingArea: '',
+  floorLevel: '',
+  unitType: '', // <--- Ye line add karein
+  locationUnit: ''
+})
 
   useEffect(() => {
     fetchInitialData();
@@ -122,7 +127,7 @@ const downloadExcel = () => {
       
       rows.push([
         srNo++,
-        report.date || '',
+        report.submittedAt || report.date || '',
         `${report.block} | ${report.floor} | ${report.location || ''}`,
         item.category || '',
         report.submittedBy || '',
@@ -260,15 +265,18 @@ const downloadExcel = () => {
     if (allItems.length === 0) return alert("Select a category!");
 
     const reportData = {
-      projectName: project,
-      block: spotData.buildingArea || 'N/A',
-      floor: spotData.floorLevel || 'N/A',
-      location: spotData.locationUnit || 'N/A',
-      submittedBy: currentUser,
-      items: allItems,
-      status: 'Pending',
-      date: new Date().toLocaleDateString('en-GB')
-    };
+    projectName: project,
+    block: spotData.buildingArea || 'N/A',
+    floor: spotData.floorLevel || 'N/A',
+    unitType: spotData.unitType || 'N/A',
+    location: spotData.locationUnit || 'N/A',
+    submittedBy: currentUser,
+    items: allItems,
+    status: 'Pending',
+    // Niche wali line ko update kiya gaya hai (Date + Time ke liye)
+    submittedAt: new Date().toLocaleString('en-GB', { hour12: true }), 
+    date: new Date().toLocaleDateString('en-GB') 
+  };
 
     try {
       setLoading(true);
@@ -353,19 +361,39 @@ const downloadExcel = () => {
           <div className="px-6 mt-2">
             <h3 className="text-[#004080] font-black text-xs border-l-4 border-[#004080] pl-2 mb-4 uppercase tracking-widest">Identify Location</h3>
             <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm">
-              <div className="space-y-1">
-                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Building / Area</label>
-                 <input name="buildingArea" value={spotData.buildingArea} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]" placeholder="Enter Building Name" />
-              </div>
-              <div className="space-y-1">
-                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Floor / Level</label>
-                 <input name="floorLevel" value={spotData.floorLevel} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]" placeholder="Enter Floor Level" />
-              </div>
-              <div className="space-y-1">
-                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location / Unit</label>
-                 <input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]" placeholder="Enter Unit/Flat No" />
-              </div>
-            </div>
+  {/* Building Dropdown */}
+  <div className="space-y-1">
+    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Building</label>
+    <select name="buildingArea" value={spotData.buildingArea} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
+      <option value="">Select Building</option>
+      {buildingOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+    </select>
+  </div>
+
+  {/* Floor Dropdown */}
+  <div className="space-y-1">
+    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Floor</label>
+    <select name="floorLevel" value={spotData.floorLevel} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
+      <option value="">Select Floor</option>
+      {floorOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+    </select>
+  </div>
+
+  {/* Unit Type Dropdown (Naya Box) */}
+  <div className="space-y-1">
+    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Unit/Area</label>
+    <select name="unitType" value={spotData.unitType} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
+      <option value="">Select Unit Type</option>
+      {unitTypeOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+    </select>
+  </div>
+
+  {/* Location Manual Typing */}
+  <div className="space-y-1">
+    <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location</label>
+    <input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]" placeholder="Enter Unit/Flat No" />
+  </div>
+</div>
 
             <div className="mt-8">
               <h3 className="text-[#004080] font-black text-xs border-l-4 border-[#004080] pl-2 mb-4 uppercase tracking-widest">Select Checklist Categories</h3>
@@ -719,7 +747,8 @@ const downloadExcel = () => {
               <thead>
                 <tr className="bg-[#004080] text-white">
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Sr No</th>
-                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date</th>
+                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date & Time (SE)</th>
+                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date & Time (QE)</th>
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Location</th>
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Checklist</th>
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Engineer Name</th>
@@ -728,38 +757,66 @@ const downloadExcel = () => {
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  let srNo = 1
-                  return reportData.flatMap((report, rIdx) =>
-                    report.items.map((item, iIdx) => {
-                      let remark = 'Pending'
-                      let remarkColor = 'text-orange-500'
-                      if (item.qeDecision === 'pass') { remark = 'Approved'; remarkColor = 'text-green-600' }
-                      else if (item.qeDecision === 'fail' && report.status === 'Approved') { remark = 'Rework Approved'; remarkColor = 'text-blue-600' }
-                      else if (item.qeDecision === 'fail' && report.status === 'Returned') { remark = 'Rework Reject'; remarkColor = 'text-red-600' }
+  {(() => {
+    let srNo = 1;
+    return reportData.flatMap((report, rIdx) =>
+      report.items.map((item, iIdx) => {
+        let remark = 'Pending';
+        let remarkColor = 'text-orange-500';
+        if (item.qeDecision === 'pass') { 
+          remark = 'Approved'; 
+          remarkColor = 'text-green-600'; 
+        } else if (item.qeDecision === 'fail' && report.status === 'Approved') { 
+          remark = 'Rework Approved'; 
+          remarkColor = 'text-blue-600'; 
+        } else if (item.qeDecision === 'fail' && report.status === 'Returned') { 
+          remark = 'Rework Reject'; 
+          remarkColor = 'text-red-600'; 
+        }
 
-                      return (
-                        <tr key={`${rIdx}-${iIdx}`} className={`border-b border-gray-100 ${srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-                          <td className="p-2 font-bold text-gray-500 border-r border-gray-100">{srNo++}</td>
-                          <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">{report.date || '-'}</td>
-                          <td className="p-2 text-gray-700 border-r border-gray-100">
-                            <span className="block">{report.block}</span>
-                            <span className="block text-gray-400">{report.floor}</span>
-                            <span className="block text-gray-400">{report.location}</span>
-                          </td>
-                          <td className="p-2 text-gray-700 border-r border-gray-100 max-w-[80px]">
-                            <span className="block font-bold text-[#004080]">{item.category}</span>
-                            <span className="block text-gray-500 truncate">{item.question?.substring(0, 30)}...</span>
-                          </td>
-                          <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">{report.submittedBy || '-'}</td>
-                          <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">Quality Engineer</td>
-                          <td className={`p-2 font-black ${remarkColor} whitespace-nowrap`}>{remark}</td>
-                        </tr>
-                      )
-                    })
-                  )
-                })()}
-              </tbody>
+        return (
+          <tr key={`${rIdx}-${iIdx}`} className={`border-b border-gray-100 ${srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+            <td className="p-2 font-bold text-gray-500 border-r border-gray-100">{srNo++}</td>
+
+            {/* 1. SE Date & Time Column */}
+            <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
+  <span className="block font-bold">{report.date || '-'}</span>
+  <span className="block text-gray-400">{report.submittedAt ? report.submittedAt.split(',')[1]?.trim() || '' : ''}</span>
+</td>
+
+            {/* 2. QE Date & Time Column */}
+            <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
+  {item.qeDecision ? (
+    <>
+      <span className="block font-bold">{report.updatedAt ? report.updatedAt.split(',')[0] : report.date || '-'}</span>
+      <span className="block text-gray-400">{report.updatedAt ? report.updatedAt.split(',')[1]?.trim() || '' : ''}</span>
+    </>
+  ) : (
+    <span className="text-orange-400 italic">Waiting...</span>
+  )}
+</td>
+
+            <td className="p-2 text-gray-700 border-r border-gray-100">
+              <span className="block">{report.block}</span>
+              <span className="block text-gray-400">{report.floor}</span>
+              <span className="block text-[#004080] font-bold">{report.unitType || ''}</span>
+              <span className="block text-gray-400">{report.location}</span>
+            </td>
+
+            <td className="p-2 text-gray-700 border-r border-gray-100 max-w-[80px]">
+              <span className="block font-bold text-[#004080]">{item.category}</span>
+              <span className="block text-gray-500 truncate">{item.question?.substring(0, 30)}...</span>
+            </td>
+
+            <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">{report.submittedBy || '-'}</td>
+            <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">Quality Engineer</td>
+            <td className={`p-2 font-black ${remarkColor} whitespace-nowrap`}>{remark}</td>
+            </tr>
+              );
+              })
+              );
+              })()}
+             </tbody>
             </table>
           </div>
         )}

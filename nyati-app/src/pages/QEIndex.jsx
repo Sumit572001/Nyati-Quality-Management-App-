@@ -69,9 +69,10 @@ function QEIndex() {
     try {
       setLoading(true);
       const res = await axios.post(`${BASE_URL}/api/qe/rework-final-status`, {
-        reportId: selectedRework._id,
-        status: status 
-      });
+      reportId: selectedRework._id,
+      status: status,
+      updatedAt: new Date().toLocaleString('en-GB', { hour12: true })
+    });
       if(res.data.success) {
         alert(`Rework ${status} successfully!`);
         setView('reworks');
@@ -152,6 +153,7 @@ function QEIndex() {
       qeDecision: item.qeDecision === 'Approve' ? 'pass' : 'fail',
       qeRemarks: item.rejectDetails?.remark || '',
       observation: item.rejectDetails?.observation || '',
+      updatedAt: new Date().toLocaleString('en-GB', { hour12: true }), 
       fileCount: (item.qeDecision === 'Reject' && item.rejectDetails?.mediaFiles) ? item.rejectDetails.mediaFiles.length : 0
     }));
     formData.append('itemsData', JSON.stringify(items));
