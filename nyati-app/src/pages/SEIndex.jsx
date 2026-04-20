@@ -9,10 +9,6 @@ import {
 
 const BASE_URL = 'http://192.168.12.93:5000'
 
-const buildingOptions = [];
-const floorOptions = [];
-const unitTypeOptions = [];
-
 function SEIndex() {
   const user = JSON.parse(localStorage.getItem('nyati_user') || '{}')
   const currentUser = user.fullName || 'SE User' 
@@ -37,6 +33,10 @@ function SEIndex() {
   const [reworkPhotos, setReworkPhotos] = useState([]);
   const [categorySelection, setCategorySelection] = useState({});
 
+  const [buildingOptions, setBuildingOptions] = useState([])
+  const [floorOptions, setFloorOptions] = useState([])
+  const [unitTypeOptions, setUnitTypeOptions] = useState([])
+
   const [spotData, setSpotData] = useState({
   buildingArea: '',
   floorLevel: '',
@@ -50,20 +50,32 @@ function SEIndex() {
 
   const fetchInitialData = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/api/checklist-items`);
+      const [clRes, bldRes, flrRes, unitRes] = await Promise.all([
+        axios.get(`${BASE_URL}/api/checklist-items`),
+        axios.get(`${BASE_URL}/api/buildings`),
+        axios.get(`${BASE_URL}/api/floors`),
+        axios.get(`${BASE_URL}/api/units`)
+      ]);
+
       const grouped = {}
-      res.data.forEach(item => {
+      clRes.data.forEach(item => {
         if (!grouped[item.category]) grouped[item.category] = []
         grouped[item.category].push(item)
       })
       const arr = Object.entries(grouped).map(([name, items]) => ({ name, items }))
       setCategories(arr)
+
+      // ✅ Database se options load karo
+      setBuildingOptions(bldRes.data.map(b => b.name))
+      setFloorOptions(flrRes.data.map(f => f.name))
+      setUnitTypeOptions(unitRes.data.map(u => u.name))
+
       setLoading(false)
     } catch (err) {
       console.error("Initial fetch error", err);
       setLoading(false);
     }
-  }
+}
 
   const fetchReworkReports = async () => {
     try {
@@ -114,7 +126,7 @@ const fetchReport = async () => {
 const downloadExcel = () => {
   if (reportData.length === 0) return alert('Koi data nahi hai!')
   
-  const headers = ['Sr No', 'Date', 'Location', 'Checklist', 'Engineer Name', 'QA Name', 'Remark']
+  const headers = ['Sr No', 'Date', 'Location', 'Checklist', 'Site Engineer Name', 'Quality Engineer Name', 'Remark']
   const rows = []
   let srNo = 1
   
@@ -126,14 +138,14 @@ const downloadExcel = () => {
       else if (item.qeDecision === 'fail' && report.status === 'Returned') remark = 'Rework Reject'
       
       rows.push([
-        srNo++,
-        report.submittedAt || report.date || '',
-        `${report.block} | ${report.floor} | ${report.location || ''}`,
-        item.category || '',
-        report.submittedBy || '',
-        'Quality Engineer',
-        remark
-      ])
+  srNo++,
+  report.submittedAt || report.date || '',
+  `${report.block} | ${report.floor} | ${report.location || ''}`,
+  item.category || '',
+  report.submittedBy || '',
+  report.qeName || 'Quality Engineer', // <--- Yahan 'Quality Engineer' ko report.qeName se replace kiya
+  remark
+])
     })
   })
   
@@ -751,18 +763,22 @@ const downloadExcel = () => {
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date & Time (QE)</th>
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Location</th>
                   <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Checklist</th>
-                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Engineer Name</th>
-                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">QA Name</th>
+                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Site Engineer Name</th>
+                  <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Quality Engineer Name</th>
                   <th className="p-2 text-left whitespace-nowrap">Remark</th>
                 </tr>
               </thead>
               <tbody>
   {(() => {
     let srNo = 1;
+    // Yahan 'return' likhna zaroori hai
     return reportData.flatMap((report, rIdx) =>
       report.items.map((item, iIdx) => {
         let remark = 'Pending';
         let remarkColor = 'text-orange-500';
+        
+        const isWaiting = !item.qeDecision;
+
         if (item.qeDecision === 'pass') { 
           remark = 'Approved'; 
           remarkColor = 'text-green-600'; 
@@ -775,26 +791,40 @@ const downloadExcel = () => {
         }
 
         return (
-          <tr key={`${rIdx}-${iIdx}`} className={`border-b border-gray-100 ${srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
-            <td className="p-2 font-bold text-gray-500 border-r border-gray-100">{srNo++}</td>
+          <tr 
+            key={`${rIdx}-${iIdx}`} 
+            className={`border-b border-gray-100 ${isWaiting ? 'bg-yellow-50 shadow-inner' : (srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white')}`}
+          >
+            <td className={`p-2 font-bold text-gray-500 border-r border-gray-100 ${isWaiting ? 'border-l-4 border-l-yellow-500' : ''}`}>
+              {srNo++}
+            </td>
 
-            {/* 1. SE Date & Time Column */}
             <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
-  <span className="block font-bold">{report.date || '-'}</span>
-  <span className="block text-gray-400">{report.submittedAt ? report.submittedAt.split(',')[1]?.trim() || '' : ''}</span>
-</td>
+              <span className="block font-bold">
+                {report.submittedAt ? report.submittedAt.split(',')[0] : report.date || '-'}
+              </span>
+              <span className="block text-gray-400 mt-0.5">
+                {report.submittedAt ? report.submittedAt.split(',')[1]?.trim() || '' : ''}
+              </span>
+            </td>
 
-            {/* 2. QE Date & Time Column */}
             <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
-  {item.qeDecision ? (
-    <>
-      <span className="block font-bold">{report.updatedAt ? report.updatedAt.split(',')[0] : report.date || '-'}</span>
-      <span className="block text-gray-400">{report.updatedAt ? report.updatedAt.split(',')[1]?.trim() || '' : ''}</span>
-    </>
-  ) : (
-    <span className="text-orange-400 italic">Waiting...</span>
-  )}
-</td>
+              {item.qeDecision ? (
+                <>
+                  <span className="block font-bold">
+                    {report.updatedAt ? report.updatedAt.split(',')[0] : report.date || '-'}
+                  </span>
+                  <span className="block text-gray-400 mt-0.5">
+                    {report.updatedAt ? report.updatedAt.split(',')[1]?.trim() || '' : 
+                     <span className="italic text-orange-300">Time N/A</span>}
+                  </span>
+                </>
+              ) : (
+                <span className="text-orange-600 font-black italic animate-pulse bg-orange-50 px-1 rounded">
+                  Waiting...
+                </span>
+              )}
+            </td>
 
             <td className="p-2 text-gray-700 border-r border-gray-100">
               <span className="block">{report.block}</span>
@@ -809,14 +839,18 @@ const downloadExcel = () => {
             </td>
 
             <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">{report.submittedBy || '-'}</td>
-            <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">Quality Engineer</td>
-            <td className={`p-2 font-black ${remarkColor} whitespace-nowrap`}>{remark}</td>
-            </tr>
-              );
-              })
-              );
-              })()}
-             </tbody>
+            <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">
+              {report.qeName || 'Quality Engineer'} 
+            </td>
+            <td className={`p-2 font-black ${remarkColor} whitespace-nowrap`}>
+              {isWaiting ? 'PENDING' : remark}
+            </td>
+          </tr>
+        );
+      })
+    );
+  })()}
+</tbody>
             </table>
           </div>
         )}

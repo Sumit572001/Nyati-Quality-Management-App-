@@ -144,10 +144,16 @@ function QEIndex() {
     if (!selectedReport) return;
     const allDecided = selectedReport.items.every(i => i.qeDecision);
     if (!allDecided) return alert("Saare items ka decision karein!");
+    
     const finalStatus = selectedReport.items.some(i => i.qeDecision === 'Reject') ? 'Returned' : 'Approved';
+    
     const formData = new FormData();
     formData.append('id', selectedReport._id);
     formData.append('overallStatus', finalStatus);
+
+    // ✅ YE LINE ADD KAR DI HAI
+    formData.append('qeName', currentUser); 
+
     const items = selectedReport.items.map((item, idx) => ({
       index: idx,
       qeDecision: item.qeDecision === 'Approve' ? 'pass' : 'fail',
@@ -156,7 +162,9 @@ function QEIndex() {
       updatedAt: new Date().toLocaleString('en-GB', { hour12: true }), 
       fileCount: (item.qeDecision === 'Reject' && item.rejectDetails?.mediaFiles) ? item.rejectDetails.mediaFiles.length : 0
     }));
+
     formData.append('itemsData', JSON.stringify(items));
+    
     selectedReport.items.forEach((item) => {
       if (item.qeDecision === 'Reject' && item.rejectDetails?.mediaFiles) {
         item.rejectDetails.mediaFiles.forEach((m) => {
@@ -164,6 +172,7 @@ function QEIndex() {
         });
       }
     });
+
     try {
       setLoading(true);
       const res = await axios.post(`${BASE_URL}/api/final-approve-report`, formData, {
@@ -180,7 +189,7 @@ function QEIndex() {
     } finally {
       setLoading(false);
     }
-  }
+};
 
   // --- SAFE IMAGE URL FUNCTION ---
   const getImageUrl = (path) => {
@@ -309,7 +318,7 @@ function QEIndex() {
             <div className="relative mb-4">
               <div onClick={() => setShowDropdown(!showDropdown)} className="w-full p-3 border border-gray-400 rounded-lg flex justify-between items-center bg-white shadow-sm cursor-pointer">
                 <span className={`text-sm font-bold ${selectedReport ? 'text-[#004080]' : 'text-gray-400'}`}>
-                  {selectedReport ? `${selectedReport.block} - ${selectedReport.floor}` : '-- SELECT PENDING CHECKLIST --'}
+                {selectedReport ? `${selectedReport.block} - ${selectedReport.floor} (${selectedReport.unitType || ''})` : '-- SELECT PENDING CHECKLIST --'} 
                 </span>
                 <FontAwesomeIcon icon={showDropdown ? faChevronUp : faChevronDown} className="text-gray-500" />
               </div>
@@ -317,8 +326,8 @@ function QEIndex() {
                 <div className="absolute z-10 w-full mt-1 border rounded-md bg-white shadow-xl max-h-60 overflow-y-auto">
                   {pendingReports.map((report) => (
                     <div key={report._id} onClick={() => { setSelectedReport(report); setShowDropdown(false); }} className="p-3 border-b hover:bg-blue-50 cursor-pointer text-xs font-bold text-gray-700">
-                      {report.block} | {report.floor} | {report.location}
-                    </div>
+                     {report.block} | {report.floor} | {report.unitType || 'N/A'} | {report.location}
+                  </div>
                   ))}
                 </div>
               )}
@@ -413,7 +422,7 @@ function QEIndex() {
             <div className="bg-[#004080] text-white p-4 rounded-xl mb-6 shadow-lg">
                 <h3 className="text-xs font-bold uppercase mb-1">Rework Verification</h3>
                 <p className="text-lg font-bold">{selectedRework?.block} - {selectedRework?.floor}</p>
-                <p className="text-[11px] opacity-80">{selectedRework?.location} | {selectedRework?.projectName}</p>
+                <p className="text-[11px] opacity-80">{selectedRework?.unitType} | {selectedRework?.location} | {selectedRework?.projectName}</p>
             </div>
 
             <div className="space-y-10 px-2">
