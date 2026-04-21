@@ -26,6 +26,11 @@ function QEIndex() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [activeItemIdx, setActiveItemIdx] = useState(null);
   
+  // ✅ NEW: Admin Panel se data lane ke liye states
+  const [buildingOptions, setBuildingOptions] = useState([]);
+  const [floorOptions, setFloorOptions] = useState([]);
+  const [unitOptions, setUnitOptions] = useState([]);
+
   const [rejectFormData, setRejectFormData] = useState({
     observation: '',
     remark: '',
@@ -36,9 +41,27 @@ function QEIndex() {
   const role = "Quality Engineer"
   const projectSite = user?.siteName || "Nyati Unitree"
 
+  // ✅ Updated useEffect: Dono chize load karega
   useEffect(() => {
-    fetchPendingReports()
+    fetchInitialData();
+    fetchPendingReports();
   }, [])
+
+  // ✅ NEW: Admin Data Fetch Function
+  const fetchInitialData = async () => {
+    try {
+      const [resBld, resFlr, resUnit] = await Promise.all([
+        axios.get(`${BASE_URL}/api/buildings`),
+        axios.get(`${BASE_URL}/api/floors`),
+        axios.get(`${BASE_URL}/api/units`)
+      ]);
+      setBuildingOptions(resBld.data.map(b => b.name));
+      setFloorOptions(resFlr.data.map(f => f.name));
+      setUnitOptions(resUnit.data.map(u => u.name));
+    } catch (err) {
+      console.error("QE Filters load karne mein error!", err);
+    }
+  };
 
   const fetchPendingReports = async () => {
     try {
@@ -136,9 +159,9 @@ function QEIndex() {
   }
 
   const handleLogout = () => {
-  localStorage.removeItem('nyati_user')
-  window.location.href = '/' // Simple redirect
-}
+    localStorage.removeItem('nyati_user')
+    window.location.href = '/'
+  }
 
   const submitFinalDecision = async () => {
     if (!selectedReport) return;
@@ -150,8 +173,6 @@ function QEIndex() {
     const formData = new FormData();
     formData.append('id', selectedReport._id);
     formData.append('overallStatus', finalStatus);
-
-    // ✅ YE LINE ADD KAR DI HAI
     formData.append('qeName', currentUser); 
 
     const items = selectedReport.items.map((item, idx) => ({
@@ -189,18 +210,14 @@ function QEIndex() {
     } finally {
       setLoading(false);
     }
-};
+  };
 
-  // --- SAFE IMAGE URL FUNCTION ---
   const getImageUrl = (path) => {
     if (!path) return "https://via.placeholder.com/150?text=No+Image";
-    // Agar path full URL hai, toh use karein. Varna base URL lagayein.
-    // Hum yahan check kar rahe hain ki kya path mein slash missing toh nahi
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     return path.startsWith('http') ? path : `${BASE_URL}${cleanPath}`;
   };
 
-  // Guard for non-logged-in user
   if (!user || !user.fullName) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-center p-4">
@@ -314,7 +331,7 @@ function QEIndex() {
           </div>
 
           <div className="px-4">
-            <label className="block font-bold text-gray-700 mb-2 text-[10px] uppercase tracking-widest">Checklist</label>
+            <label className="block font-bold text-gray-700 mb-2 text-[10px] uppercase tracking-widest">Checklist Selection</label>
             <div className="relative mb-4">
               <div onClick={() => setShowDropdown(!showDropdown)} className="w-full p-3 border border-gray-400 rounded-lg flex justify-between items-center bg-white shadow-sm cursor-pointer">
                 <span className={`text-sm font-bold ${selectedReport ? 'text-[#004080]' : 'text-gray-400'}`}>
@@ -324,11 +341,13 @@ function QEIndex() {
               </div>
               {showDropdown && (
                 <div className="absolute z-10 w-full mt-1 border rounded-md bg-white shadow-xl max-h-60 overflow-y-auto">
-                  {pendingReports.map((report) => (
+                  {pendingReports.length > 0 ? pendingReports.map((report) => (
                     <div key={report._id} onClick={() => { setSelectedReport(report); setShowDropdown(false); }} className="p-3 border-b hover:bg-blue-50 cursor-pointer text-xs font-bold text-gray-700">
                      {report.block} | {report.floor} | {report.unitType || 'N/A'} | {report.location}
                   </div>
-                  ))}
+                  )) : (
+                    <div className="p-4 text-center text-gray-400 text-xs font-bold">No reports pending</div>
+                  )}
                 </div>
               )}
             </div>
@@ -345,7 +364,6 @@ function QEIndex() {
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex-1">
                           <p className="text-[12px] font-bold text-gray-800 leading-tight">{idx + 1}. {item.question}</p>
-                          {/* Image logic updated with getImageUrl */}
                           {item.photos && item.photos.length > 0 && (
                             <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
                               {item.photos.map((img, i) => (

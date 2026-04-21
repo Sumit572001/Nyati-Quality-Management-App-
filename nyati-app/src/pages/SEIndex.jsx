@@ -48,32 +48,49 @@ function SEIndex() {
     fetchInitialData();
   }, [])
 
-  const fetchInitialData = async () => {
+  // ✅ UPDATED DYNAMIC FETCH (Merged Logic)
+const fetchInitialData = async () => {
     try {
-      const [clRes, bldRes, flrRes, unitRes] = await Promise.all([
+      setLoading(true); // Data load hote waqt loading dikhane ke liye
+      
+      const [clRes, bldRes, flrRes, unitRes, catRes] = await Promise.all([
         axios.get(`${BASE_URL}/api/checklist-items`),
         axios.get(`${BASE_URL}/api/buildings`),
         axios.get(`${BASE_URL}/api/floors`),
-        axios.get(`${BASE_URL}/api/units`)
+        axios.get(`${BASE_URL}/api/units`),
+        axios.get(`${BASE_URL}/api/categories`) // ✅ Naya categories fetch
       ]);
 
+      // 1. Checklist Items grouping logic (Aapka purana logic)
       const grouped = {}
       clRes.data.forEach(item => {
         if (!grouped[item.category]) grouped[item.category] = []
         grouped[item.category].push(item)
       })
       const arr = Object.entries(grouped).map(([name, items]) => ({ name, items }))
-      setCategories(arr)
+      setCategories(arr) // Ye checklist points dikhane ke liye hai
 
-      // ✅ Database se options load karo
+      // 2. Dropdown Options (Database se dynamic data)
       setBuildingOptions(bldRes.data.map(b => b.name))
       setFloorOptions(flrRes.data.map(f => f.name))
-      setUnitTypeOptions(unitRes.data.map(u => u.name))
+      
+      // Note: Aapke code mein setUnitTypeOptions tha, isliye wahi naam rakha hai
+      if (typeof setUnitTypeOptions === 'function') {
+        setUnitTypeOptions(unitRes.data.map(u => u.name))
+      } else if (typeof setUnitOptions === 'function') {
+        setUnitOptions(unitRes.data.map(u => u.name))
+      }
+
+      // 3. Category Dropdown Options (Agar aapne category dropdown banaya hai)
+      if (typeof setCategoryOptions === 'function') {
+        setCategoryOptions(catRes.data.map(c => c.name))
+      }
 
       setLoading(false)
     } catch (err) {
-      console.error("Initial fetch error", err);
+      console.error("Initial fetch error:", err);
       setLoading(false);
+      // alert("Database se data load nahi ho paya!"); // Optional: Error alert
     }
 }
 
