@@ -5,23 +5,28 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus, faTrash, faSignOutAlt, faList, faTags, faBuilding, faStairs, faHome } from '@fortawesome/free-solid-svg-icons'
 
 const BASE_URL = 'http://192.168.12.93:5000'
+// const BASE_URL = "http://localhost:5000";
 
 function AdminPanel() {
   // Tabs State
   const [activeTab, setActiveTab] = useState('checklist')
-  
+
   // Form States
   const [category, setCategory] = useState('')
   const [question, setQuestion] = useState('')
   const [newName, setNewName] = useState('') // For Building, Floor, Unit, Category names
-  
+
+  // Selection States for Floor/Unit Creation
+  const [selectedBuilding, setSelectedBuilding] = useState('')
+  const [selectedFloor, setSelectedFloor] = useState('')
+
   // Data Lists
   const [items, setItems] = useState([])
   const [categories, setCategories] = useState([])
   const [buildings, setBuildings] = useState([])
   const [floors, setFloors] = useState([])
   const [units, setUnits] = useState([])
-  
+
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
@@ -47,10 +52,14 @@ function AdminPanel() {
       setBuildings(resBld.data);
       setFloors(resFlr.data);
       setUnits(resUnit.data);
-      
+
       // Set default category if available
       if (resCat.data.length > 0 && !category) {
         setCategory(resCat.data[0].name);
+      }
+      // Set default building if available
+      if (resBld.data.length > 0 && !selectedBuilding) {
+        setSelectedBuilding(resBld.data[0].name);
       }
     } catch (err) {
       console.error('Failed to load data!', err)
@@ -64,9 +73,9 @@ function AdminPanel() {
     if (!question.trim() || !category) return alert('Fill Category and Question')
     setLoading(true)
     try {
-      const res = await axios.post(`${BASE_URL}/api/add-checklist-item`, { 
-        category, 
-        questionText: question 
+      const res = await axios.post(`${BASE_URL}/api/add-checklist-item`, {
+        category,
+        questionText: question
       })
       if (res.data.success) {
         alert('New Checklist Added.')
@@ -77,18 +86,39 @@ function AdminPanel() {
     setLoading(false)
   }
 
-  // 2. Generic Add Function for Building/Floor/Unit/Category
-  const handleAddMaster = async (endpoint) => {
+  // 2. Specialized Add Function for Building/Floor/Unit/Category
+  const handleAddMaster = async () => {
     if (!newName.trim()) return alert('Name is required');
     setLoading(true);
     try {
-      const res = await axios.post(`${BASE_URL}/api/${endpoint}`, { name: newName });
+      let endpoint = '';
+      let payload = { name: newName };
+
+      if (activeTab === 'category') {
+        endpoint = 'categories';
+      } else if (activeTab === 'building') {
+        endpoint = 'buildings';
+      } else if (activeTab === 'floor') {
+        if (!selectedBuilding) return alert('Please select a Building');
+        endpoint = 'floors';
+        payload.buildingName = selectedBuilding;
+      } else if (activeTab === 'unit') {
+        if (!selectedBuilding || !selectedFloor) return alert('Please select Building and Floor');
+        endpoint = 'units';
+        payload.buildingName = selectedBuilding;
+        payload.floorName = selectedFloor;
+      }
+
+      const res = await axios.post(`${BASE_URL}/api/${endpoint}`, payload);
       if (res.data.success) {
-        alert(`${endpoint.toUpperCase()} Added!`);
+        alert(`${activeTab.toUpperCase()} Added!`);
         setNewName('');
         loadData();
       }
-    } catch (err) { alert('Error adding data') }
+    } catch (err) {
+      console.error(err);
+      alert('Error adding data');
+    }
     setLoading(false);
   }
 
@@ -109,6 +139,17 @@ function AdminPanel() {
     { id: 'floor', label: 'Floor', icon: faStairs },
     { id: 'unit', label: 'Unit/Area', icon: faHome },
   ]
+
+  // Filter floors based on selected building for Unit tab
+  const filteredFloors = floors.filter(f => f.buildingName === selectedBuilding);
+
+  // Update selected floor when building changes or tab changes
+  useEffect(() => {
+    if (activeTab === 'unit') {
+      // ✅ FIX: Auto-select band karo — hamesha blank rakho
+      setSelectedFloor('');
+    }
+  }, [selectedBuilding, activeTab]);
 
   return (
     <div className="min-h-screen bg-[#f4f7f9] pb-10">
@@ -133,7 +174,7 @@ function AdminPanel() {
       </div>
 
       <div className="max-w-2xl mx-auto p-4">
-        
+
         {/* ===== FORM SECTION ===== */}
         <div className="bg-white p-5 rounded-2xl shadow-sm mb-6 border border-gray-100">
           <h3 className="text-[#004080] font-black text-xs uppercase mb-4 border-l-4 border-[#E76F2E] pl-2">
@@ -165,6 +206,35 @@ function AdminPanel() {
             </>
           ) : (
             <>
+              {/* Conditional Dropdowns for Floor and Unit */}
+              {(activeTab === 'floor' || activeTab === 'unit') && (
+                <>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Select Building</label>
+                  <select
+                    value={selectedBuilding}
+                    onChange={e => setSelectedBuilding(e.target.value)}
+                    className="w-full p-3 border border-gray-200 rounded-xl text-sm mb-4 mt-1 outline-none focus:border-[#004080]"
+                  >
+                    <option value="">-- Choose Building --</option>
+                    {buildings.map(b => <option key={b._id} value={b.name}>{b.name}</option>)}
+                  </select>
+                </>
+              )}
+
+              {activeTab === 'unit' && (
+                <>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Select Floor</label>
+                  <select
+                    value={selectedFloor}
+                    onChange={e => setSelectedFloor(e.target.value)}
+                    className="w-full p-3 border border-gray-200 rounded-xl text-sm mb-4 mt-1 outline-none focus:border-[#004080]"
+                  >
+                    <option value="">-- Choose Floor --</option>
+                    {filteredFloors.map(f => <option key={f._id} value={f.name}>{f.name}</option>)}
+                  </select>
+                </>
+              )}
+
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{activeTab} Name</label>
               <input
                 type="text"
@@ -173,7 +243,7 @@ function AdminPanel() {
                 placeholder={`Enter ${activeTab} name...`}
                 className="w-full p-3 border border-gray-200 rounded-xl text-sm mb-4 mt-1 outline-none focus:border-[#004080]"
               />
-              <button onClick={() => handleAddMaster(activeTab === 'category' ? 'categories' : activeTab + 's')} disabled={loading} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-lg">
+              <button onClick={handleAddMaster} disabled={loading} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-lg">
                 {loading ? 'Processing...' : `Add ${activeTab}`}
               </button>
             </>
@@ -187,9 +257,9 @@ function AdminPanel() {
             <span className="bg-blue-50 text-[#004080] text-[10px] px-2 py-1 rounded-full font-bold">
               Total: {
                 activeTab === 'checklist' ? items.length :
-                activeTab === 'category' ? categories.length :
-                activeTab === 'building' ? buildings.length :
-                activeTab === 'floor' ? floors.length : units.length
+                  activeTab === 'category' ? categories.length :
+                    activeTab === 'building' ? buildings.length :
+                      activeTab === 'floor' ? floors.length : units.length
               }
             </span>
           </div>
@@ -207,7 +277,11 @@ function AdminPanel() {
 
             {activeTab !== 'checklist' && (activeTab === 'category' ? categories : activeTab === 'building' ? buildings : activeTab === 'floor' ? floors : units).map(m => (
               <div key={m._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <span className="text-sm text-gray-700 font-bold">{m.name}</span>
+                <div>
+                  <span className="text-sm text-gray-700 font-bold">{m.name}</span>
+                  {activeTab === 'floor' && <div className="text-[9px] text-gray-400 font-bold uppercase">Building: {m.buildingName}</div>}
+                  {activeTab === 'unit' && <div className="text-[9px] text-gray-400 font-bold uppercase">Bldg: {m.buildingName} | Flr: {m.floorName}</div>}
+                </div>
                 <button onClick={() => deleteItem(m._id, activeTab === 'category' ? 'categories' : activeTab + 's')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>
               </div>
             ))}
