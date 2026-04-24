@@ -103,10 +103,10 @@ function AdminPanel() {
         endpoint = 'floors';
         payload.buildingName = selectedBuilding;
       } else if (activeTab === 'unit') {
-        if (!selectedBuilding || !selectedFloor) return alert('Please select Building and Floor');
+        if (!selectedBuilding) return alert('Please select a Building');
         endpoint = 'units';
         payload.buildingName = selectedBuilding;
-        payload.floorName = selectedFloor;
+        payload.floorName = selectedFloor || ''; // Floor optional hai
       }
 
       const res = await axios.post(`${BASE_URL}/api/${endpoint}`, payload);
@@ -223,7 +223,9 @@ function AdminPanel() {
 
               {activeTab === 'unit' && (
                 <>
-                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Select Floor</label>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">
+                    Select Floor <span className="text-gray-300 normal-case"></span>
+                  </label>
                   <select
                     value={selectedFloor}
                     onChange={e => setSelectedFloor(e.target.value)}

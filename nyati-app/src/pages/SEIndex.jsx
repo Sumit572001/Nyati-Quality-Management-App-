@@ -181,6 +181,15 @@ function SEIndex() {
     } catch (err) { console.error("Floors fetch error", err); }
   };
 
+  // ✅ Naya function — building ke direct units load karo (floor ke bina)
+  const fetchUnitsByBuilding = async (buildingName) => {
+    if (!buildingName) { setUnitTypeOptions([]); return; }
+    try {
+      const res = await axios.get(`${BASE_URL}/api/units?building=${encodeURIComponent(buildingName)}`);
+      setUnitTypeOptions(res.data.map(u => u.name));
+    } catch (err) { console.error("Units by building fetch error", err); }
+  };
+
   const fetchUnitsByFloor = async (floorName, buildingName) => {
     if (!floorName) { setUnitTypeOptions([]); return; }
     try {
@@ -200,9 +209,11 @@ function SEIndex() {
       setFloorOptions([]);
       setUnitTypeOptions([]);
       fetchFloorsByBuilding(value);
+      // ✅ Building select hone pe directly building ke units bhi load karo
+      fetchUnitsByBuilding(value);
     } else if (name === 'floorLevel') {
       setSpotData(prev => ({ ...prev, floorLevel: value, unitType: '' }));
-      setUnitTypeOptions([]);
+      // ✅ Floor select hone pe us floor ke units load karo
       fetchUnitsByFloor(value, spotData.buildingArea);
     } else {
       setSpotData(prev => ({ ...prev, [name]: value }));
