@@ -15,7 +15,7 @@ const sortFloors = (floors) => {
     if (!name) return 999;
     const parts = name.split('-');
     const lastPart = parts[parts.length - 1].trim().toLowerCase();
-    
+
     if (lastPart.includes('basement')) return -20;
     if (lastPart.includes('lg') || lastPart.includes('lower ground')) return -10;
     if (lastPart.includes('gf') || lastPart.includes('ground')) return 0;
@@ -25,7 +25,7 @@ const sortFloors = (floors) => {
 
     const match = lastPart.match(/\d+/);
     if (match) return parseInt(match[0]);
-    return 999; 
+    return 999;
   };
   return [...floors].sort((a, b) => getPriority(a) - getPriority(b));
 };
@@ -53,7 +53,7 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
   return (
     <div className="space-y-1 relative" ref={containerRef}>
       <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">{label}</label>
-      <div 
+      <div
         onClick={() => { setIsOpen(!isOpen); if (!isOpen) setSearchTerm(''); }}
         className={`w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm transition-all duration-200 flex justify-between items-center cursor-pointer shadow-sm ${isOpen ? 'border-[#004080] ring-2 ring-blue-50' : 'hover:border-gray-300'}`}
       >
@@ -107,14 +107,14 @@ function SEIndex() {
   const [selectedCats, setSelectedCats] = useState([])
   const [showQCDropdown, setShowQCDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('dashboard') 
+  const [view, setView] = useState('dashboard')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [reworkReports, setReworkReports] = useState([])
   const [historyReports, setHistoryReports] = useState([])
   const [reportData, setReportData] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0])
-  const [reportView, setReportView] = useState('filter') 
+  const [reportView, setReportView] = useState('filter')
   const [downloadedReports, setDownloadedReports] = useState([])
   const [selectedRework, setSelectedRework] = useState(null);
   const [reworkRemark, setReworkRemark] = useState('');
@@ -134,7 +134,7 @@ function SEIndex() {
   const [spotData, setSpotData] = useState({
     buildingArea: '',
     floorLevel: '',
-    unitType: '', 
+    unitType: '',
     locationUnit: ''
   })
 
@@ -155,10 +155,10 @@ function SEIndex() {
     try {
       const res = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
       const allReports = Array.isArray(res.data) ? res.data : [];
-      
+
       const today = new Date().toLocaleDateString('en-GB');
       const todayTasks = allReports.filter(r => (r.submittedAt || r.date)?.includes(today)).length;
-      
+
       const resRework = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
       const reworks = Array.isArray(resRework.data) ? resRework.data : [];
 
@@ -315,9 +315,9 @@ function SEIndex() {
   const downloadExcel = () => {
     if (reportData.length === 0) return alert('No data!')
     const headers = ['Sr No', 'Date & Time (SE)', 'Date & Time (QE)', 'Location', 'Checklist', 'SE Name', 'QE Name', 'Remark']
-    
+
     let srNo = 1;
-    const body = reportData.flatMap(r => 
+    const body = reportData.flatMap(r =>
       r.items.map(it => {
         let remark = 'Pending';
         if (it.qeDecision === 'pass') remark = 'Approved';
@@ -395,7 +395,7 @@ function SEIndex() {
 
   return (
     <div className="min-h-screen bg-white max-w-md mx-auto shadow-sm pb-10 relative overflow-x-hidden font-sans">
-      
+
       {/* SIDEBAR */}
       <div className={`fixed inset-0 z-[100] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="absolute inset-0 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>
@@ -454,9 +454,9 @@ function SEIndex() {
               <p className="text-[9px] font-bold text-gray-400 uppercase">Tasks Today</p>
             </div>
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500" onClick={fetchReworkReports}>
-               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
-               <p className="text-xl font-black text-red-600">{dashboardStats.reworkCount}</p>
-               <p className="text-[9px] font-bold text-gray-400 uppercase">Reworks</p>
+              <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
+              <p className="text-xl font-black text-red-600">{dashboardStats.reworkCount}</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Reworks</p>
             </div>
           </div>
 
@@ -472,16 +472,16 @@ function SEIndex() {
             </div>
 
             <div className="mt-4 relative z-10">
-               <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
-                  <span>Progress</span>
-                  <span>Target 100%</span>
-               </div>
-               <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
-                  <div 
-                    className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-1000" 
-                    style={{ width: `${dashboardStats.compliance}%` }}
-                  ></div>
-               </div>
+              <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
+                <span>Progress</span>
+                <span>Target 100%</span>
+              </div>
+              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
+                <div
+                  className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-1000"
+                  style={{ width: `${dashboardStats.compliance}%` }}
+                ></div>
+              </div>
             </div>
           </div>
           <div className="mb-20">
@@ -513,18 +513,18 @@ function SEIndex() {
       {/* INSPECTION VIEW */}
       {view === 'main' && (
         <div className="animate-in fade-in duration-500">
-          <div className="p-4"><button onClick={()=>setView('dashboard')} className="mb-4 text-[#004080] font-black text-xs uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button></div>
+          <div className="p-4"><button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-black text-xs uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button></div>
           <div className="px-6 space-y-8">
             <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
-              <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v)=>handleSpotInputChange({target:{name:'buildingArea',value:v}})} />
-              <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v)=>handleSpotInputChange({target:{name:'floorLevel',value:v}})} />
-              <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v)=>handleSpotInputChange({target:{name:'unitType',value:v}})} />
+              <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v) => handleSpotInputChange({ target: { name: 'buildingArea', value: v } })} />
+              <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v) => handleSpotInputChange({ target: { name: 'floorLevel', value: v } })} />
+              <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v) => handleSpotInputChange({ target: { name: 'unitType', value: v } })} />
               <div className="space-y-1"><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location / Flat No</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 501" /></div>
             </div>
             <div className="space-y-4">
               <h3 className="text-[#004080] font-black text-xs uppercase border-l-4 border-[#004080] pl-2 ml-1">Categories</h3>
-              <div onClick={()=>setShowQCDropdown(!showQCDropdown)} className="p-4 border-2 border-gray-200 rounded-xl bg-white flex justify-between items-center cursor-pointer shadow-sm"><span className="text-xs font-bold truncate pr-4 text-gray-700">{selectedCats.length>0?selectedCats.map(c=>c.name).join(', '):'-- SELECT --'}</span><FontAwesomeIcon icon={showQCDropdown?faChevronUp:faChevronDown} className="text-gray-400" /></div>
-              {showQCDropdown && <div className="bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto">{categories.map((c,i)=>(<div key={i} onClick={()=>toggleCategory(c)} className={`p-4 border-b flex justify-between items-center ${selectedCats.find(s=>s.name===c.name)?'bg-blue-50':''}`}><span className="text-xs font-bold">{c.name}</span><FontAwesomeIcon icon={selectedCats.find(s=>s.name===c.name)?faCheckSquare:faSquare} className={selectedCats.find(s=>s.name===c.name)?'text-[#004080]':'text-gray-300'} /></div>))}</div>}
+              <div onClick={() => setShowQCDropdown(!showQCDropdown)} className="p-4 border-2 border-gray-200 rounded-xl bg-white flex justify-between items-center cursor-pointer shadow-sm"><span className="text-xs font-bold truncate pr-4 text-gray-700">{selectedCats.length > 0 ? selectedCats.map(c => c.name).join(', ') : '-- SELECT --'}</span><FontAwesomeIcon icon={showQCDropdown ? faChevronUp : faChevronDown} className="text-gray-400" /></div>
+              {showQCDropdown && <div className="bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto">{categories.map((c, i) => (<div key={i} onClick={() => toggleCategory(c)} className={`p-4 border-b flex justify-between items-center ${selectedCats.find(s => s.name === c.name) ? 'bg-blue-50' : ''}`}><span className="text-xs font-bold">{c.name}</span><FontAwesomeIcon icon={selectedCats.find(s => s.name === c.name) ? faCheckSquare : faSquare} className={selectedCats.find(s => s.name === c.name) ? 'text-[#004080]' : 'text-gray-300'} /></div>))}</div>}
             </div>
             <button onClick={handleInitialSubmit} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-200 tracking-widest text-sm translate-y-4">Go to Checklist</button>
           </div>
@@ -534,33 +534,33 @@ function SEIndex() {
       {/* CHECKLIST VIEW */}
       {view === 'checklist' && (
         <div className="p-4 animate-in slide-in-from-right duration-500">
-           <button onClick={()=>setView('main')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-           <div className="space-y-6">
-              {selectedCats.map((cat, ci)=>(
-                <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
-                   <div className="bg-[#004080] text-white p-4 flex justify-between items-center font-black text-[10px] uppercase"><span>{cat.name}</span><div className="flex items-center gap-2"><span>ALL</span><input type="checkbox" className="w-5 h-5 accent-green-500" checked={categorySelection[cat.name]||false} onChange={()=>handleHeaderCheckboxChange(cat.name)} /></div></div>
-                   <div className="p-4 space-y-4 bg-gray-50">{cat.items.map((it, ii)=>(<div key={ii} className={`p-4 rounded-xl border font-bold text-xs ${categorySelection[cat.name]?'bg-green-50 border-green-200 text-gray-800':'bg-white text-gray-400'}`}>{it.questionText}</div>))}</div>
-                </div>
-              ))}
-           </div>
-           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t max-w-md mx-auto z-40"><button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-sm" disabled={loading}><FontAwesomeIcon icon={loading?faUpload:faCheckCircle} /> {loading?'Submitting...':'Submit to QE'}</button></div>
+          <button onClick={() => setView('main')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <div className="space-y-6">
+            {selectedCats.map((cat, ci) => (
+              <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-[#004080] text-white p-4 flex justify-between items-center font-black text-[10px] uppercase"><span>{cat.name}</span><div className="flex items-center gap-2"><span>ALL</span><input type="checkbox" className="w-5 h-5 accent-green-500" checked={categorySelection[cat.name] || false} onChange={() => handleHeaderCheckboxChange(cat.name)} /></div></div>
+                <div className="p-4 space-y-4 bg-gray-50">{cat.items.map((it, ii) => (<div key={ii} className={`p-4 rounded-xl border font-bold text-xs ${categorySelection[cat.name] ? 'bg-green-50 border-green-200 text-gray-800' : 'bg-white text-gray-400'}`}>{it.questionText}</div>))}</div>
+              </div>
+            ))}
+          </div>
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t max-w-md mx-auto z-40"><button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-sm" disabled={loading}><FontAwesomeIcon icon={loading ? faUpload : faCheckCircle} /> {loading ? 'Submitting...' : 'Submit to QE'}</button></div>
         </div>
       )}
 
       {/* REWORK VIEW */}
       {view === 'rework' && (
         <div className="p-4 animate-in slide-in-from-left duration-300 mb-10">
-          <button onClick={()=>setView('dashboard')} className="mb-4 text-[#004080] font-bold"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="flex items-center gap-2 mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-sm font-black text-red-600 uppercase">Pending Rejections</h2><span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{reworkReports.length}</span></div>
-          <div className="space-y-4">{reworkReports.map((r, ri)=>(<div key={ri} className="bg-white border rounded-2xl overflow-hidden shadow-sm border-t-4 border-t-red-500"><div className="bg-red-50 p-3 flex justify-between"><div className="text-[10px] font-black text-red-700">{r.block} | {r.floor}</div><div className="text-[9px] text-gray-400 font-bold">{r.date}</div></div><div className="divide-y">{r.items.map((it, ii)=>it.qeDecision==='fail' && (<div key={ii} className="p-4 cursor-pointer hover:bg-red-50 flex justify-between items-center" onClick={()=>openReworkForm(it, r._id, ii)}><div className="flex-1"><p className="text-[11px] font-bold text-gray-800">{it.question}</p><p className="text-[9px] text-red-500 font-bold mt-1">REWORK REQUIRED</p></div><FontAwesomeIcon icon={faChevronDown} className="text-gray-300 -rotate-90" /></div>))}</div></div>))}</div>
+          <div className="space-y-4">{reworkReports.map((r, ri) => (<div key={ri} className="bg-white border rounded-2xl overflow-hidden shadow-sm border-t-4 border-t-red-500"><div className="bg-red-50 p-3 flex justify-between"><div className="text-[10px] font-black text-red-700">{r.block} | {r.floor}</div><div className="text-[9px] text-gray-400 font-bold">{r.date}</div></div><div className="divide-y">{r.items.map((it, ii) => it.qeDecision === 'fail' && (<div key={ii} className="p-4 cursor-pointer hover:bg-red-50 flex justify-between items-center" onClick={() => openReworkForm(it, r._id, ii)}><div className="flex-1"><p className="text-[11px] font-bold text-gray-800">{it.question}</p><p className="text-[9px] text-red-500 font-bold mt-1">REWORK REQUIRED</p></div><FontAwesomeIcon icon={faChevronDown} className="text-gray-300 -rotate-90" /></div>))}</div></div>))}</div>
         </div>
       )}
 
       {/* REWORK FORM */}
       {view === 'rework-form' && selectedRework && (
         <div className="p-4 animate-in slide-in-from-bottom duration-400 mb-32">
-          <button onClick={()=>setView('rework')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-          <div className="bg-white border rounded-2xl shadow-2xl overflow-hidden mb-10"><div className="bg-[#004080] text-white p-5"><div className="text-[10px] opacity-60 uppercase font-black">{selectedRework.category}</div><div className="font-black text-sm mt-1">{selectedRework.question}</div></div><div className="p-5 space-y-6"><div className="bg-red-50 p-4 rounded-xl border border-red-100"><p className="text-[10px] font-black text-red-600 uppercase mb-2">QE Observation:</p><p className="text-xs font-bold text-gray-800">{selectedRework.observation || 'Checking quality standard...'}</p></div><div className="space-y-2"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status Remark</label><textarea className="w-full border-2 border-gray-100 rounded-xl p-4 text-sm focus:border-[#004080] outline-none" rows="3" placeholder="Explain what was fixed..." value={reworkRemark} onChange={(e)=>setReworkRemark(e.target.value)} /></div><div className="space-y-3"><div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Evidence Photos</label><label className="bg-blue-50 text-[#004080] p-3 rounded-full cursor-pointer active:scale-90 transition-all shadow-sm"><FontAwesomeIcon icon={faCamera} size="lg" /><input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} /></label></div><div className="flex flex-wrap gap-2">{reworkPhotos.map((p,i)=>(<div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-gray-100 shadow-sm"><img src={p.url} className="w-full h-full object-cover" /><button onClick={()=>setReworkPhotos(prev=>prev.filter((_,idx)=>idx!==i))} className="absolute top-0 right-0 bg-red-600 text-white w-6 h-6 flex items-center justify-center text-[10px] shadow-lg"><FontAwesomeIcon icon={faTimes} /></button></div>))}</div></div><button onClick={submitRework} className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/20" disabled={loading}>{loading?'Submitting...':'Submit to QE'}</button></div></div>
+          <button onClick={() => setView('rework')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <div className="bg-white border rounded-2xl shadow-2xl overflow-hidden mb-10"><div className="bg-[#004080] text-white p-5"><div className="text-[10px] opacity-60 uppercase font-black">{selectedRework.category}</div><div className="font-black text-sm mt-1">{selectedRework.question}</div></div><div className="p-5 space-y-6"><div className="bg-red-50 p-4 rounded-xl border border-red-100"><p className="text-[10px] font-black text-red-600 uppercase mb-2">QE Observation:</p><p className="text-xs font-bold text-gray-800">{selectedRework.observation || 'Checking quality standard...'}</p></div><div className="space-y-2"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status Remark</label><textarea className="w-full border-2 border-gray-100 rounded-xl p-4 text-sm focus:border-[#004080] outline-none" rows="3" placeholder="Explain what was fixed..." value={reworkRemark} onChange={(e) => setReworkRemark(e.target.value)} /></div><div className="space-y-3"><div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Evidence Photos</label><label className="bg-blue-50 text-[#004080] p-3 rounded-full cursor-pointer active:scale-90 transition-all shadow-sm"><FontAwesomeIcon icon={faCamera} size="lg" /><input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} /></label></div><div className="flex flex-wrap gap-2">{reworkPhotos.map((p, i) => (<div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-gray-100 shadow-sm"><img src={p.url} className="w-full h-full object-cover" /><button onClick={() => setReworkPhotos(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-red-600 text-white w-6 h-6 flex items-center justify-center text-[10px] shadow-lg"><FontAwesomeIcon icon={faTimes} /></button></div>))}</div></div><button onClick={submitRework} className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/20" disabled={loading}>{loading ? 'Submitting...' : 'Submit to QE'}</button></div></div>
         </div>
       )}
 
@@ -575,10 +575,10 @@ function SEIndex() {
 
           <div className="space-y-4">
             {(() => {
-              const fullyApproved = historyReports.filter(report => 
+              const fullyApproved = historyReports.filter(report =>
                 report.items.every(item => item.qeDecision === 'pass')
               );
-              
+
               if (fullyApproved.length === 0) {
                 return (
                   <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
@@ -601,7 +601,7 @@ function SEIndex() {
                         <span className="text-[9px] text-gray-400 font-bold">{report.date}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] font-black uppercase text-green-600 flex items-center gap-1">
-                             100% CLEAR <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />
+                            100% CLEAR <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />
                           </span>
                           <div className={`w-6 h-6 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[#004080] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
                             <FontAwesomeIcon icon={faChevronDown} className="text-[10px]" />
@@ -648,75 +648,75 @@ function SEIndex() {
         <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-10">
           <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="flex items-center gap-2 mb-6 border-l-4 border-[#004080] pl-3">
-             <h2 className="text-sm font-black text-[#004080] uppercase tracking-widest">Inspection Report</h2>
+            <h2 className="text-sm font-black text-[#004080] uppercase tracking-widest">Inspection Report</h2>
           </div>
 
           {reportView === 'filter' ? (
             <div className="bg-white border p-5 rounded-2xl shadow-sm space-y-4">
-               <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase">From Date</label>
-                  <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
-               </div>
-               <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase">To Date</label>
-                  <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
-               </div>
-               <button onClick={fetchReport} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase tracking-widest text-xs">Generate Report</button>
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase">From Date</label>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black text-gray-400 uppercase">To Date</label>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
+              </div>
+              <button onClick={fetchReport} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase tracking-widest text-xs">Generate Report</button>
             </div>
           ) : (
             <>
-               <div className="flex justify-between items-center mb-4">
-                  <button onClick={() => setReportView('filter')} className="text-[#004080] font-bold text-xs">← Change Dates</button>
-                  <button onClick={downloadExcel} className="flex items-center gap-2 bg-green-600 text-white text-[10px] font-black px-4 py-2 rounded-lg shadow"><FontAwesomeIcon icon={faUpload} /> Export Excel</button>
-               </div>
+              <div className="flex justify-between items-center mb-4">
+                <button onClick={() => setReportView('filter')} className="text-[#004080] font-bold text-xs">← Change Dates</button>
+                <button onClick={downloadExcel} className="flex items-center gap-2 bg-green-600 text-white text-[10px] font-black px-4 py-2 rounded-lg shadow"><FontAwesomeIcon icon={faUpload} /> Export Excel</button>
+              </div>
 
-               {reportData.length === 0 ? (
-                 <div className="text-center py-16 text-gray-300 uppercase text-[10px] font-bold">No Records Found</div>
-               ) : (
-                 <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                   <table className="w-full text-[9px] border-collapse">
-                     <thead>
-                       <tr className="bg-[#004080] text-white uppercase tracking-tighter">
-                         <th className="p-2 text-left border-r border-blue-700">Sr</th>
-                         <th className="p-2 text-left border-r border-blue-700">Date & Time (SE)</th>
-                         <th className="p-2 text-left border-r border-blue-700">Date & Time (QE)</th>
-                         <th className="p-2 text-left border-r border-blue-700">Location</th>
-                         <th className="p-2 text-left border-r border-blue-700">Checklist</th>
-                         <th className="p-2 text-left border-r border-blue-700">SE Name</th>
-                         <th className="p-2 text-left border-r border-blue-700">QE Name</th>
-                         <th className="p-2 text-left">Remark</th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y">
-                       {(() => {
-                         let srNo = 1;
-                         return reportData.flatMap((report, rIdx) => 
-                           report.items.map((item, iIdx) => {
-                             let remark = 'Pending';
-                             let remarkColor = 'text-orange-500';
-                             if (item.qeDecision === 'pass') { remark = 'Approved'; remarkColor = 'text-green-600'; }
-                             else if (item.qeDecision === 'fail' && report.status === 'Approved') { remark = 'Rework Pass'; remarkColor = 'text-blue-600'; }
-                             else if (item.qeDecision === 'fail' && report.status === 'Returned') { remark = 'Rework Reject'; remarkColor = 'text-red-600'; }
+              {reportData.length === 0 ? (
+                <div className="text-center py-16 text-gray-300 uppercase text-[10px] font-bold">No Records Found</div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                  <table className="w-full text-[9px] border-collapse">
+                    <thead>
+                      <tr className="bg-[#004080] text-white uppercase tracking-tighter">
+                        <th className="p-2 text-left border-r border-blue-700">Sr</th>
+                        <th className="p-2 text-left border-r border-blue-700">Date & Time (SE)</th>
+                        <th className="p-2 text-left border-r border-blue-700">Date & Time (QE)</th>
+                        <th className="p-2 text-left border-r border-blue-700">Location</th>
+                        <th className="p-2 text-left border-r border-blue-700">Checklist</th>
+                        <th className="p-2 text-left border-r border-blue-700">SE Name</th>
+                        <th className="p-2 text-left border-r border-blue-700">QE Name</th>
+                        <th className="p-2 text-left">Remark</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(() => {
+                        let srNo = 1;
+                        return reportData.flatMap((report, rIdx) =>
+                          report.items.map((item, iIdx) => {
+                            let remark = 'Pending';
+                            let remarkColor = 'text-orange-500';
+                            if (item.qeDecision === 'pass') { remark = 'Approved'; remarkColor = 'text-green-600'; }
+                            else if (item.qeDecision === 'fail' && report.status === 'Approved') { remark = 'Rework Pass'; remarkColor = 'text-blue-600'; }
+                            else if (item.qeDecision === 'fail' && report.status === 'Returned') { remark = 'Rework Reject'; remarkColor = 'text-red-600'; }
 
-                             return (
-                               <tr key={`${rIdx}-${iIdx}`} className={srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                 <td className="p-2 border-r">{srNo++}</td>
-                                 <td className="p-2 border-r whitespace-nowrap">{report.submittedAt || report.date}</td>
-                                 <td className="p-2 border-r whitespace-nowrap">{report.updatedAt || '-'}</td>
-                                 <td className="p-2 border-r">{report.block} | {report.floor} | {report.location}</td>
-                                 <td className="p-2 border-r font-bold text-[#004080]">{item.category}</td>
-                                 <td className="p-2 border-r whitespace-nowrap">{report.submittedBy}</td>
-                                 <td className="p-2 border-r whitespace-nowrap">{report.qeName || '-'}</td>
-                                 <td className={`p-2 font-black ${remarkColor}`}>{remark}</td>
-                               </tr>
-                             );
-                           })
-                         );
-                       })()}
-                     </tbody>
-                   </table>
-                 </div>
-               )}
+                            return (
+                              <tr key={`${rIdx}-${iIdx}`} className={srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                <td className="p-2 border-r">{srNo++}</td>
+                                <td className="p-2 border-r whitespace-nowrap">{report.submittedAt || report.date}</td>
+                                <td className="p-2 border-r whitespace-nowrap">{report.updatedAt || '-'}</td>
+                                <td className="p-2 border-r">{report.block} | {report.floor} | {report.location}</td>
+                                <td className="p-2 border-r font-bold text-[#004080]">{item.category}</td>
+                                <td className="p-2 border-r whitespace-nowrap">{report.submittedBy}</td>
+                                <td className="p-2 border-r whitespace-nowrap">{report.qeName || '-'}</td>
+                                <td className={`p-2 font-black ${remarkColor}`}>{remark}</td>
+                              </tr>
+                            );
+                          })
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -726,16 +726,16 @@ function SEIndex() {
       {view === 'downloadReport' && (
         <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-10">
           <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-           <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-green-500">Downloaded Reports</h2>
-           {downloadedReports.map(r=>(
-             <div key={r.id} className="bg-white border rounded-xl p-4 mb-3 flex justify-between items-center shadow-sm">
-                <div>
-                   <p className="text-[11px] font-black text-gray-800">{r.filename}</p>
-                   <p className="text-[9px] text-gray-400 mt-0.5">{r.downloadedAt}</p>
-                </div>
-                <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
-             </div>
-           ))}
+          <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-green-500">Downloaded Reports</h2>
+          {downloadedReports.map(r => (
+            <div key={r.id} className="bg-white border rounded-xl p-4 mb-3 flex justify-between items-center shadow-sm">
+              <div>
+                <p className="text-[11px] font-black text-gray-800">{r.filename}</p>
+                <p className="text-[9px] text-gray-400 mt-0.5">{r.downloadedAt}</p>
+              </div>
+              <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
+            </div>
+          ))}
         </div>
       )}
 
