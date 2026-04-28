@@ -1,13 +1,101 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faChevronDown, faChevronUp, faCheckCircle, faArrowLeft, faCheckSquare, faSquare,
   faBars, faTimes, faSignOutAlt, faUserCircle, faHistory, faHome, faInfoCircle, faUserTie, faCalendarAlt,
-  faCamera, faUpload, faTrash, faExclamationTriangle
+  faCamera, faUpload, faTrash, faExclamationTriangle, faPlus, faChartLine, faListAlt, faTrophy, faCheck
 } from '@fortawesome/free-solid-svg-icons'
 
 const BASE_URL = 'http://192.168.12.93:5000'
+
+// --- HELPERS ---
+const sortFloors = (floors) => {
+  const getPriority = (name) => {
+    if (!name) return 999;
+    const parts = name.split('-');
+    const lastPart = parts[parts.length - 1].trim().toLowerCase();
+    
+    if (lastPart.includes('basement')) return -20;
+    if (lastPart.includes('lg') || lastPart.includes('lower ground')) return -10;
+    if (lastPart.includes('gf') || lastPart.includes('ground')) return 0;
+    if (lastPart.includes('ug') || lastPart.includes('upper ground')) return 0.5;
+    if (lastPart.includes('podium')) return 0.6;
+    if (lastPart.includes('stilt')) return 0.7;
+
+    const match = lastPart.match(/\d+/);
+    if (match) return parseInt(match[0]);
+    return 999; 
+  };
+  return [...floors].sort((a, b) => getPriority(a) - getPriority(b));
+};
+
+// --- COMPONENTS ---
+function SearchableSelect({ options, value, onChange, placeholder, label }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return options;
+    const lowerSearch = searchTerm.toLowerCase();
+    return options.filter(opt => opt.toLowerCase().includes(lowerSearch));
+  }, [options, searchTerm]);
+
+  return (
+    <div className="space-y-1 relative" ref={containerRef}>
+      <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">{label}</label>
+      <div 
+        onClick={() => { setIsOpen(!isOpen); if (!isOpen) setSearchTerm(''); }}
+        className={`w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm transition-all duration-200 flex justify-between items-center cursor-pointer shadow-sm ${isOpen ? 'border-[#004080] ring-2 ring-blue-50' : 'hover:border-gray-300'}`}
+      >
+        <span className={`truncate ${value ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+          {value || placeholder}
+        </span>
+        <FontAwesomeIcon icon={isOpen ? faChevronUp : faChevronDown} className={`text-xs transition-transform duration-200 ${isOpen ? 'text-[#004080]' : 'text-gray-400'}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in slide-in-from-top-1 duration-150">
+          <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+            <input
+              type="text"
+              autoFocus
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-[#004080] focus:ring-1 focus:ring-blue-50 transition-all font-medium"
+              placeholder={`Search ${label}...`}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((opt, i) => (
+                <div
+                  key={i}
+                  onClick={() => { onChange(opt); setIsOpen(false); setSearchTerm(''); }}
+                  className={`px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer border-l-4 ${opt === value ? 'bg-blue-50 text-[#004080] border-[#004080]' : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  {opt}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-[10px] text-gray-400 text-center uppercase font-black tracking-widest bg-gray-50/20">No results found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SEIndex() {
   const user = JSON.parse(localStorage.getItem('nyati_user') || '{}')
@@ -19,19 +107,25 @@ function SEIndex() {
   const [selectedCats, setSelectedCats] = useState([])
   const [showQCDropdown, setShowQCDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('main')
+  const [view, setView] = useState('dashboard') 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [reworkReports, setReworkReports] = useState([])
   const [historyReports, setHistoryReports] = useState([])
   const [reportData, setReportData] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0])
-  const [reportView, setReportView] = useState('filter') // 'filter' | 'table'
+  const [reportView, setReportView] = useState('filter') 
   const [downloadedReports, setDownloadedReports] = useState([])
   const [selectedRework, setSelectedRework] = useState(null);
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
   const [categorySelection, setCategorySelection] = useState({});
+  const [dashboardStats, setDashboardStats] = useState({
+    todayTasks: 0,
+    reworkCount: 0,
+    compliance: 0,
+    recentActivity: []
+  });
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -40,13 +134,57 @@ function SEIndex() {
   const [spotData, setSpotData] = useState({
     buildingArea: '',
     floorLevel: '',
-    unitType: '', // <--- Ye line add karein
+    unitType: '', 
     locationUnit: ''
   })
 
   useEffect(() => {
-    fetchInitialData();
+    const init = async () => {
+      await Promise.all([fetchInitialData(), fetchDashboardStats(), checkPendingReworks(true)]);
+      setLoading(false);
+    };
+    init();
+    const interval = setInterval(() => {
+      checkPendingReworks(false);
+      fetchDashboardStats();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [])
+
+  const fetchDashboardStats = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
+      const allReports = Array.isArray(res.data) ? res.data : [];
+      
+      const today = new Date().toLocaleDateString('en-GB');
+      const todayTasks = allReports.filter(r => (r.submittedAt || r.date)?.includes(today)).length;
+      
+      const resRework = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
+      const reworks = Array.isArray(resRework.data) ? resRework.data : [];
+
+      const totalItems = allReports.reduce((acc, r) => acc + (r.items?.length || 0), 0);
+      const passedItems = allReports.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
+      const compliance = totalItems > 0 ? Math.round((passedItems / totalItems) * 100) : 0;
+
+      setDashboardStats({
+        todayTasks: todayTasks,
+        reworkCount: reworks.length,
+        compliance: compliance,
+        recentActivity: allReports.slice(0, 5)
+      });
+    } catch (err) {
+      console.error("Dashboard stats error", err);
+    }
+  };
+
+  const checkPendingReworks = async (isInitial = false) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
+      setReworkReports(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Polling error", err);
+    }
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -54,23 +192,80 @@ function SEIndex() {
         axios.get(`${BASE_URL}/api/checklist-items`),
         axios.get(`${BASE_URL}/api/buildings`)
       ]);
-
       const grouped = {}
       clRes.data.forEach(item => {
         if (!grouped[item.category]) grouped[item.category] = []
         grouped[item.category].push(item)
       })
-      const arr = Object.entries(grouped).map(([name, items]) => ({ name, items }))
-      setCategories(arr)
-
-      // ✅ Database se options load karo
-      setBuildingOptions(bldRes.data.map(b => b.name))
-      setFloorOptions([])
-      setUnitTypeOptions([])
-
-      setLoading(false)
+      setCategories(Object.entries(grouped).map(([name, items]) => ({ name, items })))
+      setBuildingOptions([...bldRes.data.map(b => b.name)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })))
     } catch (err) {
       console.error("Initial fetch error", err);
+    }
+  }
+
+  const handleSpotInputChange = async (e) => {
+    const { name, value } = e.target;
+    const updated = { ...spotData, [name]: value };
+    if (name === 'buildingArea') {
+      updated.floorLevel = '';
+      updated.unitType = '';
+      const res = await axios.get(`${BASE_URL}/api/floors?building=${encodeURIComponent(value)}`);
+      setFloorOptions(sortFloors(res.data.map(f => f.name)));
+    } else if (name === 'floorLevel') {
+      updated.unitType = '';
+      const res = await axios.get(`${BASE_URL}/api/units?building=${encodeURIComponent(spotData.buildingArea)}&floor=${encodeURIComponent(value)}`);
+      setUnitTypeOptions(res.data.map(u => u.name));
+    }
+    setSpotData(updated);
+  };
+
+  const toggleCategory = (cat) => {
+    setSelectedCats(prev => prev.find(c => c.name === cat.name) ? prev.filter(c => c.name !== cat.name) : [...prev, cat]);
+  }
+
+  const handleInitialSubmit = () => {
+    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType || !spotData.locationUnit) return alert("Pehle building info bhariye!");
+    if (selectedCats.length === 0) return alert("Kam se kam ek category chuniye!");
+    setView('checklist');
+  }
+
+  const submitFinalReport = async () => {
+    const reportData = {
+      user: currentUser,
+      submittedBy: currentUser,
+      block: spotData.buildingArea,
+      floor: spotData.floorLevel,
+      unitType: spotData.unitType,
+      location: spotData.locationUnit,
+      date: new Date().toLocaleDateString('en-GB'),
+      submittedAt: new Date().toLocaleString('en-GB', { hour12: true }),
+      status: 'In-Review',
+      projectName: project,
+      items: []
+    }
+    selectedCats.forEach(cat => {
+      cat.items.forEach(item => {
+        if (categorySelection[cat.name]) {
+          reportData.items.push({ category: cat.name, question: item.questionText, status: 'Completed', submittedAt: reportData.submittedAt });
+        }
+      })
+    })
+    if (reportData.items.length === 0) return alert("Koi bhi item select nahi kiya!");
+    try {
+      setLoading(true);
+      const res = await axios.post(`${BASE_URL}/api/submit-report`, reportData)
+      if (res.data.success) {
+        alert('Checklist Sent to QE!');
+        setView('dashboard');
+        setSelectedCats([]);
+        setCategorySelection({});
+        setSpotData({ buildingArea: '', floorLevel: '', unitType: '', locationUnit: '' });
+        fetchDashboardStats();
+      }
+    } catch (err) {
+      alert('Submission Failed!');
+    } finally {
       setLoading(false);
     }
   }
@@ -83,8 +278,7 @@ function SEIndex() {
       setView('rework');
       setIsSidebarOpen(false);
     } catch (err) {
-      console.error("Error fetching rework", err);
-      alert("Rework list load nahi ho pa rahi hai!");
+      alert("Rework list fail!");
     } finally {
       setLoading(false);
     }
@@ -98,290 +292,127 @@ function SEIndex() {
       setView('history');
       setIsSidebarOpen(false);
     } catch (err) {
-      console.error("Error fetching history", err);
-      alert("History load nahi ho pa rahi!");
+      alert("History fail!");
     } finally {
       setLoading(false);
     }
   }
 
   const fetchReport = async () => {
-    if (!fromDate) return alert('Please select From Date!')
+    if (!fromDate) return alert('Select From Date!')
     try {
       setLoading(true)
-      const res = await axios.get(
-        `${BASE_URL}/api/se-report?user=${encodeURIComponent(currentUser)}&from=${fromDate}&to=${toDate}`
-      )
+      const res = await axios.get(`${BASE_URL}/api/se-report?user=${encodeURIComponent(currentUser)}&from=${fromDate}&to=${toDate}`)
       setReportData(Array.isArray(res.data) ? res.data : [])
       setReportView('table')
     } catch (err) {
-      alert('Report load nahi ho pa rahi!')
+      alert('Report error!')
     } finally {
       setLoading(false)
     }
   }
 
   const downloadExcel = () => {
-    if (reportData.length === 0) return alert('Koi data nahi hai!')
+    if (reportData.length === 0) return alert('No data!')
+    const headers = ['Sr No', 'Date & Time (SE)', 'Date & Time (QE)', 'Location', 'Checklist', 'SE Name', 'QE Name', 'Remark']
+    
+    let srNo = 1;
+    const body = reportData.flatMap(r => 
+      r.items.map(it => {
+        let remark = 'Pending';
+        if (it.qeDecision === 'pass') remark = 'Approved';
+        else if (it.qeDecision === 'fail' && r.status === 'Approved') remark = 'Rework Pass';
+        else if (it.qeDecision === 'fail' && r.status === 'Returned') remark = 'Rework Reject';
 
-    const headers = ['Sr No', 'Date', 'Location', 'Checklist', 'Site Engineer Name', 'Quality Engineer Name', 'Remark']
-    const rows = []
-    let srNo = 1
-
-    reportData.forEach(report => {
-      report.items.forEach(item => {
-        let remark = 'Pending'
-        if (item.qeDecision === 'pass') remark = 'Approved'
-        else if (item.qeDecision === 'fail' && report.status === 'Approved') remark = 'Rework Approved'
-        else if (item.qeDecision === 'fail' && report.status === 'Returned') remark = 'Rework Reject'
-
-        rows.push([
+        return [
           srNo++,
-          report.submittedAt || report.date || '',
-          `${report.block} | ${report.floor} | ${report.location || ''}`,
-          item.category || '',
-          report.submittedBy || '',
-          report.qeName || 'Quality Engineer', // <--- Yahan 'Quality Engineer' ko report.qeName se replace kiya
+          r.submittedAt || r.date,
+          r.updatedAt || '-',
+          `${r.block} | ${r.floor} | ${r.location}`,
+          it.category,
+          r.submittedBy,
+          r.qeName || '-',
           remark
-        ])
+        ].map(val => `"${val}"`).join(',');
       })
-    })
+    ).join('\n');
 
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `Nyati_Report_${fromDate}_to_${toDate}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    // ✅ Download Report section mein save karo
-    const newReport = {
-      id: Date.now(),
-      filename: `Nyati_Report_${fromDate}_to_${toDate}.csv`,
-      fromDate,
-      toDate,
-      downloadedAt: new Date().toLocaleString('en-GB'),
-      csvContent
-    }
-    setDownloadedReports(prev => [newReport, ...prev])
+    const csvContent = headers.join(',') + '\n' + body;
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Report_${fromDate}_${toDate}.csv`;
+    link.click();
+    setDownloadedReports(prev => [{ id: Date.now(), filename: link.download, fromDate, toDate, downloadedAt: new Date().toLocaleString(), csvContent }, ...prev]);
   }
 
-  const fetchFloorsByBuilding = async (buildingName) => {
-    if (!buildingName) { setFloorOptions([]); return; }
-    try {
-      const res = await axios.get(`${BASE_URL}/api/floors?building=${encodeURIComponent(buildingName)}`);
-      setFloorOptions(res.data.map(f => f.name));
-    } catch (err) { console.error("Floors fetch error", err); }
-  };
-
-  // ✅ Naya function — building ke direct units load karo (floor ke bina)
-  const fetchUnitsByBuilding = async (buildingName) => {
-    if (!buildingName) { setUnitTypeOptions([]); return; }
-    try {
-      const res = await axios.get(`${BASE_URL}/api/units?building=${encodeURIComponent(buildingName)}`);
-      setUnitTypeOptions(res.data.map(u => u.name));
-    } catch (err) { console.error("Units by building fetch error", err); }
-  };
-
-  const fetchUnitsByFloor = async (floorName, buildingName) => {
-    if (!floorName) { setUnitTypeOptions([]); return; }
-    try {
-      let url = `${BASE_URL}/api/units?floor=${encodeURIComponent(floorName)}`;
-      if (buildingName) {
-        url += `&building=${encodeURIComponent(buildingName)}`;
-      }
-      const res = await axios.get(url);
-      setUnitTypeOptions(res.data.map(u => u.name));
-    } catch (err) { console.error("Units fetch error", err); }
-  };
-
-  const handleSpotInputChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'buildingArea') {
-      setSpotData(prev => ({ ...prev, buildingArea: value, floorLevel: '', unitType: '' }));
-      setFloorOptions([]);
-      setUnitTypeOptions([]);
-      fetchFloorsByBuilding(value);
-      // ✅ Building select hone pe directly building ke units bhi load karo
-      fetchUnitsByBuilding(value);
-    } else if (name === 'floorLevel') {
-      setSpotData(prev => ({ ...prev, floorLevel: value, unitType: '' }));
-      // ✅ Floor select hone pe us floor ke units load karo
-      fetchUnitsByFloor(value, spotData.buildingArea);
-    } else {
-      setSpotData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const toggleCategory = (cat) => {
-    const isSelected = selectedCats.find(c => c.name === cat.name);
-    if (isSelected) {
-      setSelectedCats(selectedCats.filter(c => c.name !== cat.name));
-    } else {
-      setSelectedCats([...selectedCats, cat]);
-    }
-  }
-
-  const handleInitialSubmit = () => {
-    if (!spotData.buildingArea || !spotData.floorLevel) {
-      return alert('Please fill Building and Floor details first!');
-    }
-    if (selectedCats.length === 0) {
-      return alert('Kam se kam ek QC Category select karein!')
-    }
-    setView('checklist')
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('nyati_user')
-    window.location.href = '/' // Simple redirect
-  }
-
-  const openReworkForm = (item, reportId, itemIndexInReport) => {
-    setSelectedRework({ ...item, reportId, itemIndexInReport });
-    setView('rework-form');
-    setReworkRemark('');
-    setReworkPhotos([]);
-  }
-
-  const handlePhotoChange = (e) => {
-    const files = Array.from(e.target.files);
-    const newPhotos = files.map(file => ({
-      file: file,
-      preview: URL.createObjectURL(file)
-    }));
-    setReworkPhotos([...reworkPhotos, ...newPhotos]);
-  }
-
-  const removePhoto = (index) => {
-    const updated = [...reworkPhotos];
-    updated.splice(index, 1);
-    setReworkPhotos(updated);
-  }
-
-  const submitReworkResponse = async () => {
-    if (!reworkRemark) return alert("Please enter rework remark!");
-
-    const formData = new FormData();
-    formData.append('id', selectedRework.reportId);
-
-    const reworkData = [{
-      index: selectedRework.itemIndexInReport,
-      reworkRemark: reworkRemark,
-      fileCount: reworkPhotos.length
-    }];
-
-    formData.append('itemsData', JSON.stringify(reworkData));
-    reworkPhotos.forEach(p => formData.append('media', p.file));
-
-    try {
-      setLoading(true);
-      const res = await axios.post(`${BASE_URL}/api/submit-rework`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (res.data.success) {
-        alert("Rework Submitted to QE Successfully!");
-        fetchReworkReports();
-      }
-    } catch (err) {
-      alert("Submission failed!");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const submitFinalReport = async () => {
-    const allItems = [];
-    selectedCats.forEach(cat => {
-      const isHeaderChecked = categorySelection[cat.name] || false;
-      cat.items.forEach((item) => {
-        allItems.push({
-          question: item.questionText,
-          category: cat.name,
-          status: isHeaderChecked ? 'Passed' : 'Not Checked',
-          photos: [],
-          qeDecision: '',
-          qeRemark: '',
-          observation: ''
-        });
-      });
-    });
-
-    if (allItems.length === 0) return alert("Select a category!");
-
-    const reportData = {
-      projectName: project,
-      block: spotData.buildingArea || 'N/A',
-      floor: spotData.floorLevel || 'N/A',
-      unitType: spotData.unitType || 'N/A',
-      location: spotData.locationUnit || 'N/A',
-      submittedBy: currentUser,
-      items: allItems,
-      status: 'Pending',
-      // Niche wali line ko update kiya gaya hai (Date + Time ke liye)
-      submittedAt: new Date().toLocaleString('en-GB', { hour12: true }),
-      date: new Date().toLocaleDateString('en-GB')
-    };
-
-    try {
-      setLoading(true);
-      const res = await axios.post(`${BASE_URL}/api/submit-report`, reportData)
-      if (res.data.success) {
-        alert('Checklist Sent to QE!');
-        // ✅ FIX: reload ki jagah sirf state reset karo
-        setView('main');
-        setSelectedCats([]);
-        setCategorySelection({});
-        setSpotData({ buildingArea: '', floorLevel: '', locationUnit: '' });
-      }
-    } catch (err) {
-      alert('Submission Failed!');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const handleLogout = () => { localStorage.removeItem('nyati_user'); window.location.href = '/'; }
 
   const handleHeaderCheckboxChange = (catName) => {
-    setCategorySelection(prev => ({
-      ...prev,
-      [catName]: !prev[catName]
-    }));
+    setCategorySelection(prev => ({ ...prev, [catName]: !prev[catName] }));
+  };
+
+  const openReworkForm = (item, reportId, itemIdx) => {
+    setSelectedRework({ ...item, reportId, itemIdx });
+    setReworkPhotos([]);
+    setReworkRemark('');
+    setView('rework-form');
+  }
+
+  const handleReworkPhotoChange = (e) => {
+    const files = Array.from(e.target.files);
+    setReworkPhotos(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
+  }
+
+  const submitRework = async () => {
+    if (!reworkRemark) return alert("Remark likhiye!");
+    const formData = new FormData();
+    formData.append('reportId', selectedRework.reportId);
+    formData.append('itemIndex', selectedRework.itemIdx);
+    formData.append('reworkRemark', reworkRemark);
+    reworkPhotos.forEach(p => formData.append('reworkMedia', p.file));
+
+    try {
+      setLoading(true);
+      await axios.post(`${BASE_URL}/api/submit-rework`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      alert("Rework Submitted!");
+      fetchReworkReports();
+      fetchDashboardStats();
+    } catch (err) {
+      alert("Rework submission failed!");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const getImageUrl = (p) => p && (p.startsWith('http') ? p : `${BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`);
+
+  const [expandedHistory, setExpandedHistory] = useState({});
+
+  const toggleHistoryItem = (idx) => {
+    setExpandedHistory(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   return (
     <div className="min-h-screen bg-white max-w-md mx-auto shadow-sm pb-10 relative overflow-x-hidden font-sans">
-
+      
       {/* SIDEBAR */}
       <div className={`fixed inset-0 z-[100] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="absolute inset-0 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>
         <div className="absolute left-0 top-0 bottom-0 w-64 bg-[#004080] text-white p-6 shadow-2xl">
           <div className="flex justify-between items-start mb-10">
-            <h5 className="text-sm font-bold italic leading-tight w-4/5">Nyati Engineers & Consultants Pvt. Ltd</h5>
+            <h5 className="text-sm font-bold italic leading-tight w-4/5">Nyati Engineers</h5>
             <button onClick={() => setIsSidebarOpen(false)}><FontAwesomeIcon icon={faTimes} className="text-2xl" /></button>
           </div>
           <nav className="space-y-4">
-            <button onClick={() => { setView('main'); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faHome} /> Home</button>
-            <button onClick={fetchReworkReports} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> Pending Reworks</button>
+            <button onClick={() => { setView('dashboard'); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faHome} /> Dashboard</button>
+            <button onClick={fetchReworkReports} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center justify-between">
+              <div className="flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> <span>Pending Reworks</span></div>
+              {reworkReports.length > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{reworkReports.length}</span>}
+            </button>
             <button onClick={fetchHistoryReports} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faCheckCircle} /> History</button>
-            <button
-              onClick={() => { setView('report'); setReportView('filter'); setIsSidebarOpen(false); }}
-              className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"
-            >
-              <FontAwesomeIcon icon={faUpload} /> Report
-            </button>
-            <button
-              onClick={() => { setView('downloadReport'); setIsSidebarOpen(false); }}
-              className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"
-            >
-              <FontAwesomeIcon icon={faHistory} /> Report Download
-            </button>
+            <button onClick={() => { setView('report'); setReportView('filter'); setFromDate(''); setReportData([]); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faUpload} /> Report</button>
+            <button onClick={() => { setView('downloadReport'); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> Report Download</button>
             <button onClick={handleLogout} className="w-full text-left p-3 hover:bg-red-500 rounded-md flex items-center gap-3 mt-10 text-red-200"><FontAwesomeIcon icon={faSignOutAlt} /> Sign Out</button>
           </nav>
         </div>
@@ -389,591 +420,332 @@ function SEIndex() {
 
       {/* NAVBAR */}
       <div className="flex justify-between items-center p-4 border-b border-gray-100 sticky top-0 bg-white z-40">
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] hover:bg-gray-100 rounded-md transition-colors"><FontAwesomeIcon icon={faBars} className="text-2xl" /></button>
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] relative">
+          <FontAwesomeIcon icon={faBars} className="text-2xl" />
+          {reworkReports.length > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>}
+        </button>
         <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
         <div className="w-10"></div>
       </div>
 
-      {/* MAIN VIEW */}
+      {/* DASHBOARD VIEW */}
+      {view === 'dashboard' && (
+        <div className="p-4 animate-in fade-in duration-500">
+          {/* USER PROFILE CARD */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-md flex items-center gap-4 mb-6 mt-2 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50/50 rounded-bl-full -mr-10 -mt-10"></div>
+            <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center border-2 border-blue-100 shrink-0 relative z-10">
+              <FontAwesomeIcon icon={faUserTie} className="text-[#004080] text-2xl" />
+            </div>
+            <div className="flex-1 overflow-hidden relative z-10">
+              <h2 className="text-[16px] font-black text-gray-900 uppercase truncate leading-tight">{currentUser}</h2>
+              <div className="flex flex-col gap-0.5 mt-1">
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div> {role}</span>
+                <span className="text-[9px] font-black text-gray-500 uppercase truncate opacity-70 tracking-tight"><FontAwesomeIcon icon={faCalendarAlt} className="mr-1 text-blue-300" /> {project}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
+              <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faListAlt} className="text-[#004080]" /></div>
+              <p className="text-xl font-black text-gray-900">{dashboardStats.todayTasks}</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Tasks Today</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500" onClick={fetchReworkReports}>
+               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
+               <p className="text-xl font-black text-red-600">{dashboardStats.reworkCount}</p>
+               <p className="text-[9px] font-bold text-gray-400 uppercase">Reworks</p>
+            </div>
+          </div>
+
+          {/* QUALITY SCORE CARD */}
+          <div className="bg-gradient-to-br from-[#004080] to-[#002d5a] p-4 rounded-3xl text-white mb-8 shadow-xl shadow-blue-900/10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
+            <div className="flex justify-between items-center relative z-10">
+              <h2 className="text-[13px] font-black text-white uppercase tracking-wider">SITE COMPLIANCE</h2>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black">{dashboardStats.compliance}%</span>
+                <span className="text-[8px] font-bold opacity-60 uppercase">Score</span>
+              </div>
+            </div>
+
+            <div className="mt-4 relative z-10">
+               <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
+                  <span>Progress</span>
+                  <span>Target 100%</span>
+               </div>
+               <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
+                  <div 
+                    className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-1000" 
+                    style={{ width: `${dashboardStats.compliance}%` }}
+                  ></div>
+               </div>
+            </div>
+          </div>
+          <div className="mb-20">
+            <div className="flex justify-between mb-4"><h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
+            <div className="space-y-3">
+              {dashboardStats.recentActivity.length > 0 ? dashboardStats.recentActivity.map((r, i) => {
+                const isPass = r.status === 'Approved';
+                return (
+                  <div key={i} className="bg-white p-3.5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isPass ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                      <FontAwesomeIcon icon={isPass ? faCheckCircle : faExclamationTriangle} className="text-sm" />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-[10px] font-black text-gray-800 truncate leading-tight uppercase">{r.block} | {r.floor}</p>
+                      <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.date} • {r.unitType || 'Unit'}</p>
+                    </div>
+                    <div className={`text-[10px] font-black uppercase tracking-widest ${isPass ? 'text-green-500' : 'text-red-500'}`}>
+                      {isPass ? 'PASS' : 'FAIL'}
+                    </div>
+                  </div>
+                );
+              }) : <div className="text-center py-10 text-gray-300 text-[10px] uppercase font-bold">No recent activity</div>}
+            </div>
+          </div>
+          <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 max-w-md mx-auto"><button onClick={() => setView('main')} className="bg-[#004080] text-white shadow-2xl px-10 py-5 rounded-3xl font-black text-sm uppercase tracking-widest flex items-center gap-4 active:scale-95 transition-all outline outline-4 outline-white/20"><FontAwesomeIcon icon={faPlus} /> Start Inspection</button></div>
+        </div>
+      )}
+
+      {/* INSPECTION VIEW */}
       {view === 'main' && (
-        <>
-          <div className="p-4">
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-md flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-                <FontAwesomeIcon icon={faUserTie} className="text-[#004080] text-xl" />
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <h2 className="text-[15px] font-black text-gray-900 uppercase truncate leading-none">{currentUser}</h2>
-                <p className="text-[10px] font-bold text-blue-600 mt-1 uppercase tracking-wider">Designation: {role}</p>
-                <p className="text-[9px] font-black text-gray-500 mt-1 uppercase truncate opacity-70"><FontAwesomeIcon icon={faCalendarAlt} className="mr-1" /> Project: {project}</p>
-              </div>
+        <div className="animate-in fade-in duration-500">
+          <div className="p-4"><button onClick={()=>setView('dashboard')} className="mb-4 text-[#004080] font-black text-xs uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button></div>
+          <div className="px-6 space-y-8">
+            <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+              <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v)=>handleSpotInputChange({target:{name:'buildingArea',value:v}})} />
+              <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v)=>handleSpotInputChange({target:{name:'floorLevel',value:v}})} />
+              <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v)=>handleSpotInputChange({target:{name:'unitType',value:v}})} />
+              <div className="space-y-1"><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location / Flat No</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 501" /></div>
             </div>
+            <div className="space-y-4">
+              <h3 className="text-[#004080] font-black text-xs uppercase border-l-4 border-[#004080] pl-2 ml-1">Categories</h3>
+              <div onClick={()=>setShowQCDropdown(!showQCDropdown)} className="p-4 border-2 border-gray-200 rounded-xl bg-white flex justify-between items-center cursor-pointer shadow-sm"><span className="text-xs font-bold truncate pr-4 text-gray-700">{selectedCats.length>0?selectedCats.map(c=>c.name).join(', '):'-- SELECT --'}</span><FontAwesomeIcon icon={showQCDropdown?faChevronUp:faChevronDown} className="text-gray-400" /></div>
+              {showQCDropdown && <div className="bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto">{categories.map((c,i)=>(<div key={i} onClick={()=>toggleCategory(c)} className={`p-4 border-b flex justify-between items-center ${selectedCats.find(s=>s.name===c.name)?'bg-blue-50':''}`}><span className="text-xs font-bold">{c.name}</span><FontAwesomeIcon icon={selectedCats.find(s=>s.name===c.name)?faCheckSquare:faSquare} className={selectedCats.find(s=>s.name===c.name)?'text-[#004080]':'text-gray-300'} /></div>))}</div>}
+            </div>
+            <button onClick={handleInitialSubmit} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-200 tracking-widest text-sm translate-y-4">Go to Checklist</button>
           </div>
-
-          <div className="px-6 mt-2">
-            <h3 className="text-[#004080] font-black text-xs border-l-4 border-[#004080] pl-2 mb-4 uppercase tracking-widest">Identify Location</h3>
-            <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm">
-              {/* Building Dropdown */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Building</label>
-                <select name="buildingArea" value={spotData.buildingArea} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
-                  <option value="">Select Building</option>
-                  {buildingOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-
-              {/* Floor Dropdown */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Floor</label>
-                <select name="floorLevel" value={spotData.floorLevel} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
-                  <option value="">Select Floor</option>
-                  {floorOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-
-              {/* Unit Type Dropdown (Naya Box) */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Unit/Area</label>
-                <select name="unitType" value={spotData.unitType} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]">
-                  <option value="">Select Unit Type</option>
-                  {unitTypeOptions.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-
-              {/* Location Manual Typing */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location</label>
-                <input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]" placeholder="Enter Unit/Flat No" />
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <h3 className="text-[#004080] font-black text-xs border-l-4 border-[#004080] pl-2 mb-4 uppercase tracking-widest">Select Checklist Categories</h3>
-              <div onClick={() => setShowQCDropdown(!showQCDropdown)} className="w-full p-4 border-2 border-gray-200 rounded-xl flex justify-between items-center bg-white cursor-pointer shadow-sm active:scale-95 transition-all">
-                <span className="font-bold text-xs truncate pr-4 text-gray-700">{selectedCats.length > 0 ? selectedCats.map(c => c.name).join(', ') : '-- SELECT CATEGORIES --'}</span>
-                <FontAwesomeIcon icon={showQCDropdown ? faChevronUp : faChevronDown} className="text-gray-400" />
-              </div>
-              {showQCDropdown && (
-                <div className="w-full mt-2 bg-white border border-gray-200 shadow-xl rounded-xl max-h-60 overflow-y-auto z-20">
-                  {categories.map((cat, i) => {
-                    const isSelected = selectedCats.find(c => c.name === cat.name);
-                    return (
-                      <div key={i} onClick={() => toggleCategory(cat)} className={`p-4 border-b last:border-0 flex items-center justify-between cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`}>
-                        <span className={`text-xs font-bold ${isSelected ? 'text-[#004080]' : 'text-gray-600'}`}>{cat.name}</span>
-                        <FontAwesomeIcon icon={isSelected ? faCheckSquare : faSquare} className={isSelected ? 'text-[#004080]' : 'text-gray-300'} />
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <button onClick={handleInitialSubmit} className="w-full mt-12 py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-900/20 active:scale-95 transition-all tracking-widest text-sm">PROCEED TO CHECKLIST</button>
-          </div>
-        </>
+        </div>
       )}
 
       {/* CHECKLIST VIEW */}
       {view === 'checklist' && (
-        <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-20">
-          <button onClick={() => setView('main')} className="mb-6 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-          <div className="space-y-6">
-            {selectedCats.map((cat, catIdx) => {
-              const isSelectedAll = categorySelection[cat.name] || false;
-              return (
-                <div key={catIdx} className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-[#004080] text-white p-4 font-bold text-xs uppercase tracking-widest flex justify-between items-center">
-                    <span>{cat.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[8px] opacity-60">SELECT ALL</span>
-                      <input type="checkbox" className="w-5 h-5 accent-green-500 cursor-pointer" checked={isSelectedAll} onChange={() => handleHeaderCheckboxChange(cat.name)} />
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 p-2 space-y-2">
-                    {cat.items.map((item, idx) => (
-                      <div key={idx} className={`p-4 rounded-xl border transition-all duration-300 ${isSelectedAll ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 shadow-sm'}`}>
-                        <label className="text-[11px] font-bold text-gray-700 leading-tight block">{item.questionText}</label>
-                      </div>
-                    ))}
-                  </div>
+        <div className="p-4 animate-in slide-in-from-right duration-500">
+           <button onClick={()=>setView('main')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+           <div className="space-y-6">
+              {selectedCats.map((cat, ci)=>(
+                <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
+                   <div className="bg-[#004080] text-white p-4 flex justify-between items-center font-black text-[10px] uppercase"><span>{cat.name}</span><div className="flex items-center gap-2"><span>ALL</span><input type="checkbox" className="w-5 h-5 accent-green-500" checked={categorySelection[cat.name]||false} onChange={()=>handleHeaderCheckboxChange(cat.name)} /></div></div>
+                   <div className="p-4 space-y-4 bg-gray-50">{cat.items.map((it, ii)=>(<div key={ii} className={`p-4 rounded-xl border font-bold text-xs ${categorySelection[cat.name]?'bg-green-50 border-green-200 text-gray-800':'bg-white text-gray-400'}`}>{it.questionText}</div>))}</div>
                 </div>
-              );
-            })}
-          </div>
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 max-w-md mx-auto z-40">
-            <button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-sm" disabled={loading}>
-              <FontAwesomeIcon icon={loading ? faUpload : faCheckCircle} /> {loading ? "SUBMITTING..." : "SUBMIT REPORT TO QE"}
-            </button>
-          </div>
+              ))}
+           </div>
+           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t max-w-md mx-auto z-40"><button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-sm" disabled={loading}><FontAwesomeIcon icon={loading?faUpload:faCheckCircle} /> {loading?'Submitting...':'Submit to QE'}</button></div>
         </div>
       )}
 
-      {/* REWORK VIEW (LIST) */}
+      {/* REWORK VIEW */}
       {view === 'rework' && (
-        <div className="px-4 animate-in slide-in-from-left duration-300 mt-4 pb-10">
-          <button onClick={() => setView('main')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-          <div className="flex items-center gap-2 mb-6 border-l-4 border-red-500 pl-3">
-            <h2 className="text-sm font-black text-red-600 uppercase tracking-widest">Pending Reworks</h2>
-            <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{reworkReports.length}</span>
-          </div>
-
-          <div className="space-y-6">
-            {reworkReports.length > 0 ? reworkReports.map((report, rIdx) => (
-              <div key={rIdx} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 border-t-red-500">
-                <div className="bg-red-50 p-3 flex justify-between items-center border-b border-red-100">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-red-700 uppercase">{report.block} | {report.floor}</span>
-                    <span className="text-[9px] text-gray-500 font-bold">{report.location}</span>
-                  </div>
-                  <span className="text-[9px] text-gray-400 font-bold">{report.date}</span>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {report.items.map((item, iIdx) => {
-                    if (item.qeDecision === 'fail') {
-                      return (
-                        <div key={iIdx} className="p-4 cursor-pointer hover:bg-gray-50 transition-colors flex justify-between items-center group" onClick={() => openReworkForm(item, report._id, iIdx)}>
-                          <div className="flex-1">
-                            <p className="text-[11px] font-bold text-gray-800 leading-tight group-hover:text-red-600 transition-colors">{item.question}</p>
-                            <p className="text-[9px] text-gray-400 mt-1 italic"><FontAwesomeIcon icon={faExclamationTriangle} className="mr-1" /> Needs Attention</p>
-                          </div>
-                          <FontAwesomeIcon icon={faChevronDown} className="text-gray-300 -rotate-90 group-hover:text-red-400" />
-                        </div>
-                      )
-                    }
-                    return null;
-                  })}
-                </div>
-              </div>
-            )) : (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
-                <FontAwesomeIcon icon={faCheckCircle} size="3x" className="mb-4" />
-                <p className="text-xs font-bold uppercase tracking-widest">All Reworks Completed!</p>
-              </div>
-            )}
-          </div>
+        <div className="p-4 animate-in slide-in-from-left duration-300 mb-10">
+          <button onClick={()=>setView('dashboard')} className="mb-4 text-[#004080] font-bold"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <div className="flex items-center gap-2 mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-sm font-black text-red-600 uppercase">Pending Rejections</h2><span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{reworkReports.length}</span></div>
+          <div className="space-y-4">{reworkReports.map((r, ri)=>(<div key={ri} className="bg-white border rounded-2xl overflow-hidden shadow-sm border-t-4 border-t-red-500"><div className="bg-red-50 p-3 flex justify-between"><div className="text-[10px] font-black text-red-700">{r.block} | {r.floor}</div><div className="text-[9px] text-gray-400 font-bold">{r.date}</div></div><div className="divide-y">{r.items.map((it, ii)=>it.qeDecision==='fail' && (<div key={ii} className="p-4 cursor-pointer hover:bg-red-50 flex justify-between items-center" onClick={()=>openReworkForm(it, r._id, ii)}><div className="flex-1"><p className="text-[11px] font-bold text-gray-800">{it.question}</p><p className="text-[9px] text-red-500 font-bold mt-1">REWORK REQUIRED</p></div><FontAwesomeIcon icon={faChevronDown} className="text-gray-300 -rotate-90" /></div>))}</div></div>))}</div>
         </div>
       )}
 
-      {/* REWORK ACTION FORM */}
+      {/* REWORK FORM */}
       {view === 'rework-form' && selectedRework && (
-        <div className="px-4 animate-in slide-in-from-bottom duration-400 mt-4 pb-20">
-          <button onClick={() => setView('rework')} className="mb-6 text-[#004080] font-bold flex items-center gap-2 text-sm">
-            <FontAwesomeIcon icon={faArrowLeft} /> Back to Rework List
-          </button>
-
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden">
-            <div className="bg-[#004080] text-white p-5">
-              <span className="text-[9px] uppercase font-black tracking-widest opacity-60">{selectedRework.category}</span>
-              <h3 className="text-sm font-black mt-1 leading-snug">{selectedRework.question}</h3>
-            </div>
-
-            <div className="p-5 space-y-6">
-              <div className="bg-red-50 p-4 rounded-xl border border-red-100 space-y-4">
-                <div>
-                  <p className="text-[9px] font-black text-red-600 uppercase mb-1 tracking-tighter">
-                    <FontAwesomeIcon icon={faInfoCircle} className="mr-1" /> QE Observation
-                  </p>
-                  <p className="text-xs font-black text-gray-900 bg-white/50 p-2 rounded-lg border border-red-50 shadow-sm">
-                    {selectedRework.observation || 'Points failed at site inspection'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-red-600 uppercase mb-1 tracking-tighter">
-                    <FontAwesomeIcon icon={faInfoCircle} className="mr-1" /> QE Remark
-                  </p>
-                  <p className="text-xs font-black text-gray-900 bg-white/50 p-2 rounded-lg border border-red-50 shadow-sm">
-                    {selectedRework.qeRemark || 'Please rectify and resubmit.'}
-                  </p>
-                </div>
-
-                {/* Reference Photos (From QE) - Fixed Image Logic */}
-                {selectedRework.mediaUrls && selectedRework.mediaUrls.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-[9px] font-black text-red-600 uppercase mb-2">Reference Photos (From QE)</p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedRework.mediaUrls.map((imgUrl, idx) => (
-                        <img
-                          key={idx}
-                          src={imgUrl.startsWith('http') ? imgUrl : `${BASE_URL}${imgUrl}`}
-                          alt="QE ref"
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-white shadow-md cursor-pointer"
-                          onClick={() => window.open(imgUrl.startsWith('http') ? imgUrl : `${BASE_URL}${imgUrl}`, '_blank')}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-100 pt-5">
-                <h4 className="text-xs font-black text-green-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> Site Engineer Action
-                </h4>
-                <div className="space-y-5">
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Your Remark (Correction Details)</label>
-                    <textarea
-                      className="w-full border-2 border-gray-100 rounded-xl p-3 text-xs focus:border-green-500 outline-none mt-1 transition-colors min-h-[100px]"
-                      placeholder="Explain how you fixed this issue..."
-                      value={reworkRemark}
-                      onChange={(e) => setReworkRemark(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-3 ml-1">Attach Photos of work done</label>
-                    <div className="flex flex-wrap gap-3">
-                      <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:border-[#004080] hover:text-[#004080]">
-                        <FontAwesomeIcon icon={faCamera} className="text-2xl mb-1" />
-                        <span className="text-[8px] font-black uppercase">Add Photo</span>
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                      </label>
-                      {reworkPhotos.map((p, idx) => (
-                        <div key={idx} className="relative w-20 h-20 group">
-                          <img src={p.preview} alt="prev" className="w-full h-full object-cover rounded-xl border border-gray-200" />
-                          <button
-                            onClick={() => removePhoto(idx)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-[10px] flex items-center justify-center shadow-lg"
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={submitReworkResponse}
-                disabled={loading}
-                className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-green-900/20 active:scale-95 transition-all flex items-center justify-center gap-3 mt-4"
-              >
-                <FontAwesomeIcon icon={loading ? faUpload : faCheckCircle} /> {loading ? 'SUBMITTING...' : 'SEND FOR APPROVAL'}
-              </button>
-            </div>
-          </div>
+        <div className="p-4 animate-in slide-in-from-bottom duration-400 mb-32">
+          <button onClick={()=>setView('rework')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <div className="bg-white border rounded-2xl shadow-2xl overflow-hidden mb-10"><div className="bg-[#004080] text-white p-5"><div className="text-[10px] opacity-60 uppercase font-black">{selectedRework.category}</div><div className="font-black text-sm mt-1">{selectedRework.question}</div></div><div className="p-5 space-y-6"><div className="bg-red-50 p-4 rounded-xl border border-red-100"><p className="text-[10px] font-black text-red-600 uppercase mb-2">QE Observation:</p><p className="text-xs font-bold text-gray-800">{selectedRework.observation || 'Checking quality standard...'}</p></div><div className="space-y-2"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status Remark</label><textarea className="w-full border-2 border-gray-100 rounded-xl p-4 text-sm focus:border-[#004080] outline-none" rows="3" placeholder="Explain what was fixed..." value={reworkRemark} onChange={(e)=>setReworkRemark(e.target.value)} /></div><div className="space-y-3"><div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Evidence Photos</label><label className="bg-blue-50 text-[#004080] p-3 rounded-full cursor-pointer active:scale-90 transition-all shadow-sm"><FontAwesomeIcon icon={faCamera} size="lg" /><input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} /></label></div><div className="flex flex-wrap gap-2">{reworkPhotos.map((p,i)=>(<div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-gray-100 shadow-sm"><img src={p.url} className="w-full h-full object-cover" /><button onClick={()=>setReworkPhotos(prev=>prev.filter((_,idx)=>idx!==i))} className="absolute top-0 right-0 bg-red-600 text-white w-6 h-6 flex items-center justify-center text-[10px] shadow-lg"><FontAwesomeIcon icon={faTimes} /></button></div>))}</div></div><button onClick={submitRework} className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/20" disabled={loading}>{loading?'Submitting...':'Submit to QE'}</button></div></div>
         </div>
       )}
-
 
       {/* HISTORY VIEW */}
       {view === 'history' && (
-        <div className="px-4 animate-in slide-in-from-left duration-300 mt-4 pb-10">
-          <button onClick={() => setView('main')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm">
-            <FontAwesomeIcon icon={faArrowLeft} /> Back
-          </button>
+        <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-10">
+          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="flex items-center gap-2 mb-6 border-l-4 border-green-500 pl-3">
-            <h2 className="text-sm font-black text-green-600 uppercase tracking-widest">Approved History</h2>
-            <span className="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {historyReports.reduce((acc, r) => acc + r.items.filter(i => i.qeDecision === 'pass').length, 0)} Points
-            </span>
+            <h2 className="text-sm font-black text-green-600 uppercase tracking-widest">Inspection History</h2>
+            <span className="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{historyReports.length}</span>
           </div>
 
-          {historyReports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
-              <FontAwesomeIcon icon={faCheckCircle} size="3x" className="mb-4" />
-              <p className="text-xs font-bold uppercase tracking-widest">No approved reports yet</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {historyReports.map((report, rIdx) => {
-                const passedItems = report.items.filter(i => i.qeDecision === 'pass')
-                if (passedItems.length === 0) return null
+          <div className="space-y-4">
+            {(() => {
+              const fullyApproved = historyReports.filter(report => 
+                report.items.every(item => item.qeDecision === 'pass')
+              );
+              
+              if (fullyApproved.length === 0) {
                 return (
-                  <div key={rIdx} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 border-t-green-500">
-
-                    {/* Report Header */}
-                    <div className="bg-green-50 p-3 flex justify-between items-center border-b border-green-100">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-green-700 uppercase">{report.block} | {report.floor}</span>
-                        <span className="text-[9px] text-gray-500 font-bold">{report.location}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] text-gray-400 font-bold block">{report.date}</span>
-                        <span className="text-[9px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold">
-                          {report.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Passed Items */}
-                    <div className="divide-y divide-gray-50">
-                      {passedItems.map((item, iIdx) => (
-                        <div key={iIdx} className="p-4 flex items-center gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                            <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 text-xs" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-[11px] font-bold text-gray-800 leading-tight">{item.question}</p>
-                            <span className="text-[9px] font-bold text-green-600 uppercase mt-0.5 block">
-                              {item.category}
-                            </span>
-                          </div>
-                          <span className="text-[9px] font-black text-green-600 bg-green-50 px-2 py-1 rounded-lg border border-green-100">
-                            ✅ PASS
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="p-2 bg-gray-50 border-t border-gray-100 text-center">
-                      <p className="text-[9px] text-gray-400 font-bold">
-                        {passedItems.length} of {report.items.length} points cleared by QE
-                      </p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
+                    <FontAwesomeIcon icon={faHistory} size="3x" className="mb-4" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-center">Abhi koi fully clear history nahi hai</p>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                );
+              }
+
+              return fullyApproved.map((report, idx) => {
+                const isExpanded = expandedHistory[idx] || false;
+                return (
+                  <div key={idx} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 border-t-green-500 transition-all duration-300">
+                    <div className="bg-green-50/30 p-3 flex justify-between items-start cursor-pointer hover:bg-green-50/50 transition-colors" onClick={() => toggleHistoryItem(idx)}>
+                      <div className="flex flex-col flex-1">
+                        <span className="text-[10px] font-black text-[#004080] uppercase tracking-tight">{report.block} | {report.floor}</span>
+                        <span className="text-[9px] text-gray-400 font-bold">{report.unitType} | {report.location}</span>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                        <span className="text-[9px] text-gray-400 font-bold">{report.date}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black uppercase text-green-600 flex items-center gap-1">
+                             100% CLEAR <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />
+                          </span>
+                          <div className={`w-6 h-6 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[#004080] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                            <FontAwesomeIcon icon={faChevronDown} className="text-[10px]" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="animate-in slide-in-from-top duration-300">
+                        <div className="p-3 space-y-2 border-t border-gray-50 bg-white">
+                          {report.items.map((item, iIdx) => (
+                            <div key={iIdx} className="flex items-center justify-between gap-3 text-[11px] font-bold p-3 bg-gray-50/50 rounded-xl border border-gray-100/50">
+                              <div className="flex-1">
+                                <p className="text-gray-800 leading-tight">{item.question}</p>
+                                <p className="text-[9px] text-gray-400 mt-1 uppercase opacity-60">{item.category}</p>
+                              </div>
+                              <div className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-[8px] font-black">
+                                PASS
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {report.qeName && (
+                          <div className="px-4 py-3 bg-[#004080]/5 flex items-center gap-2 border-t border-gray-50">
+                            <div className="w-5 h-5 rounded-full bg-[#004080] flex items-center justify-center">
+                              <FontAwesomeIcon icon={faUserTie} className="text-white text-[8px]" />
+                            </div>
+                            <span className="text-[9px] font-black text-[#004080] uppercase tracking-wider">Reviewed by: {report.qeName}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
         </div>
       )}
-
 
       {/* REPORT VIEW */}
       {view === 'report' && (
         <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-10">
-          <button onClick={() => setView('main')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm">
-            <FontAwesomeIcon icon={faArrowLeft} /> Back
-          </button>
-
+          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="flex items-center gap-2 mb-6 border-l-4 border-[#004080] pl-3">
-            <h2 className="text-sm font-black text-[#004080] uppercase tracking-widest">Report</h2>
+             <h2 className="text-sm font-black text-[#004080] uppercase tracking-widest">Inspection Report</h2>
           </div>
 
-          {reportView === 'filter' && (
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 space-y-5">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">From Date</label>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={e => setFromDate(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">To Date</label>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={e => setToDate(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm focus:border-[#004080]"
-                />
-              </div>
-              <button
-                onClick={fetchReport}
-                disabled={loading}
-                className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
-              >
-                {loading ? 'Loading...' : 'SUBMIT'}
-              </button>
+          {reportView === 'filter' ? (
+            <div className="bg-white border p-5 rounded-2xl shadow-sm space-y-4">
+               <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">From Date</label>
+                  <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
+               </div>
+               <div>
+                  <label className="text-[9px] font-black text-gray-400 uppercase">To Date</label>
+                  <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className="w-full border rounded-lg p-3 text-sm mt-1" />
+               </div>
+               <button onClick={fetchReport} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase tracking-widest text-xs">Generate Report</button>
             </div>
-          )}
-
-          {reportView === 'table' && (
+          ) : (
             <>
-              {/* Excel Download Button */}
-              <div className="flex justify-between items-center mb-4">
-                <button
-                  onClick={() => setReportView('filter')}
-                  className="text-[#004080] font-bold text-xs flex items-center gap-1"
-                >
-                  ← Change Dates
-                </button>
-                <button
-                  onClick={downloadExcel}
-                  className="flex items-center gap-2 bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-lg shadow active:scale-95 transition-all"
-                >
-                  <FontAwesomeIcon icon={faUpload} /> Download Excel
-                </button>
-              </div>
+               <div className="flex justify-between items-center mb-4">
+                  <button onClick={() => setReportView('filter')} className="text-[#004080] font-bold text-xs">← Change Dates</button>
+                  <button onClick={downloadExcel} className="flex items-center gap-2 bg-green-600 text-white text-[10px] font-black px-4 py-2 rounded-lg shadow"><FontAwesomeIcon icon={faUpload} /> Export Excel</button>
+               </div>
 
-              {reportData.length === 0 ? (
-                <div className="text-center py-16 text-gray-300">
-                  <p className="text-xs font-bold uppercase">Is date range mein koi data nahi</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                  <table className="w-full text-[10px] border-collapse">
-                    <thead>
-                      <tr className="bg-[#004080] text-white">
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Sr No</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date & Time (SE)</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Date & Time (QE)</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Location</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Checklist</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Site Engineer Name</th>
-                        <th className="p-2 text-left whitespace-nowrap border-r border-blue-700">Quality Engineer Name</th>
-                        <th className="p-2 text-left whitespace-nowrap">Remark</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        let srNo = 1;
-                        // Yahan 'return' likhna zaroori hai
-                        return reportData.flatMap((report, rIdx) =>
-                          report.items.map((item, iIdx) => {
-                            let remark = 'Pending';
-                            let remarkColor = 'text-orange-500';
+               {reportData.length === 0 ? (
+                 <div className="text-center py-16 text-gray-300 uppercase text-[10px] font-bold">No Records Found</div>
+               ) : (
+                 <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                   <table className="w-full text-[9px] border-collapse">
+                     <thead>
+                       <tr className="bg-[#004080] text-white uppercase tracking-tighter">
+                         <th className="p-2 text-left border-r border-blue-700">Sr</th>
+                         <th className="p-2 text-left border-r border-blue-700">Date & Time (SE)</th>
+                         <th className="p-2 text-left border-r border-blue-700">Date & Time (QE)</th>
+                         <th className="p-2 text-left border-r border-blue-700">Location</th>
+                         <th className="p-2 text-left border-r border-blue-700">Checklist</th>
+                         <th className="p-2 text-left border-r border-blue-700">SE Name</th>
+                         <th className="p-2 text-left border-r border-blue-700">QE Name</th>
+                         <th className="p-2 text-left">Remark</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y">
+                       {(() => {
+                         let srNo = 1;
+                         return reportData.flatMap((report, rIdx) => 
+                           report.items.map((item, iIdx) => {
+                             let remark = 'Pending';
+                             let remarkColor = 'text-orange-500';
+                             if (item.qeDecision === 'pass') { remark = 'Approved'; remarkColor = 'text-green-600'; }
+                             else if (item.qeDecision === 'fail' && report.status === 'Approved') { remark = 'Rework Pass'; remarkColor = 'text-blue-600'; }
+                             else if (item.qeDecision === 'fail' && report.status === 'Returned') { remark = 'Rework Reject'; remarkColor = 'text-red-600'; }
 
-                            const isWaiting = !item.qeDecision;
-
-                            if (item.qeDecision === 'pass') {
-                              remark = 'Approved';
-                              remarkColor = 'text-green-600';
-                            } else if (item.qeDecision === 'fail' && report.status === 'Approved') {
-                              remark = 'Rework Approved';
-                              remarkColor = 'text-blue-600';
-                            } else if (item.qeDecision === 'fail' && report.status === 'Returned') {
-                              remark = 'Rework Reject';
-                              remarkColor = 'text-red-600';
-                            }
-
-                            return (
-                              <tr
-                                key={`${rIdx}-${iIdx}`}
-                                className={`border-b border-gray-100 ${isWaiting ? 'bg-yellow-50 shadow-inner' : (srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white')}`}
-                              >
-                                <td className={`p-2 font-bold text-gray-500 border-r border-gray-100 ${isWaiting ? 'border-l-4 border-l-yellow-500' : ''}`}>
-                                  {srNo++}
-                                </td>
-
-                                <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
-                                  <span className="block font-bold">
-                                    {report.submittedAt ? report.submittedAt.split(',')[0] : report.date || '-'}
-                                  </span>
-                                  <span className="block text-gray-400 mt-0.5">
-                                    {report.submittedAt ? report.submittedAt.split(',')[1]?.trim() || '' : ''}
-                                  </span>
-                                </td>
-
-                                <td className="p-2 text-gray-700 border-r border-gray-100 text-[9px]">
-                                  {item.qeDecision ? (
-                                    <>
-                                      <span className="block font-bold">
-                                        {report.updatedAt ? report.updatedAt.split(',')[0] : report.date || '-'}
-                                      </span>
-                                      <span className="block text-gray-400 mt-0.5">
-                                        {report.updatedAt ? report.updatedAt.split(',')[1]?.trim() || '' :
-                                          <span className="italic text-orange-300">Time N/A</span>}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-orange-600 font-black italic animate-pulse bg-orange-50 px-1 rounded">
-                                      Waiting...
-                                    </span>
-                                  )}
-                                </td>
-
-                                <td className="p-2 text-gray-700 border-r border-gray-100">
-                                  <span className="block">{report.block}</span>
-                                  <span className="block text-gray-400">{report.floor}</span>
-                                  <span className="block text-[#004080] font-bold">{report.unitType || ''}</span>
-                                  <span className="block text-gray-400">{report.location}</span>
-                                </td>
-
-                                <td className="p-2 text-gray-700 border-r border-gray-100 max-w-[80px]">
-                                  <span className="block font-bold text-[#004080]">{item.category}</span>
-                                  <span className="block text-gray-500 truncate">{item.question?.substring(0, 30)}...</span>
-                                </td>
-
-                                <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">{report.submittedBy || '-'}</td>
-                                <td className="p-2 text-gray-700 border-r border-gray-100 whitespace-nowrap">
-                                  {report.qeName || 'Quality Engineer'}
-                                </td>
-                                <td className={`p-2 font-black ${remarkColor} whitespace-nowrap`}>
-                                  {isWaiting ? 'PENDING' : remark}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        );
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                             return (
+                               <tr key={`${rIdx}-${iIdx}`} className={srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                 <td className="p-2 border-r">{srNo++}</td>
+                                 <td className="p-2 border-r whitespace-nowrap">{report.submittedAt || report.date}</td>
+                                 <td className="p-2 border-r whitespace-nowrap">{report.updatedAt || '-'}</td>
+                                 <td className="p-2 border-r">{report.block} | {report.floor} | {report.location}</td>
+                                 <td className="p-2 border-r font-bold text-[#004080]">{item.category}</td>
+                                 <td className="p-2 border-r whitespace-nowrap">{report.submittedBy}</td>
+                                 <td className="p-2 border-r whitespace-nowrap">{report.qeName || '-'}</td>
+                                 <td className={`p-2 font-black ${remarkColor}`}>{remark}</td>
+                               </tr>
+                             );
+                           })
+                         );
+                       })()}
+                     </tbody>
+                   </table>
+                 </div>
+               )}
             </>
           )}
         </div>
       )}
 
-
-      {/* REPORT DOWNLOAD VIEW */}
+      {/* DOWNLOAD REPORT VIEW */}
       {view === 'downloadReport' && (
         <div className="px-4 animate-in slide-in-from-right duration-300 mt-4 pb-10">
-          <button onClick={() => setView('main')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm">
-            <FontAwesomeIcon icon={faArrowLeft} /> Back
-          </button>
-
-          <div className="flex items-center gap-2 mb-6 border-l-4 border-green-500 pl-3">
-            <h2 className="text-sm font-black text-green-600 uppercase tracking-widest">Report Download</h2>
-            <span className="bg-green-100 text-green-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {downloadedReports.length} Files
-            </span>
-          </div>
-
-          {downloadedReports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
-              <FontAwesomeIcon icon={faUpload} size="3x" className="mb-4" />
-              <p className="text-xs font-bold uppercase tracking-widest text-center">
-                Abhi koi report download nahi ki hai
-              </p>
-              <p className="text-[9px] text-gray-300 mt-2 text-center">
-                Report section mein jaake Excel download karo
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {downloadedReports.map((report) => (
-                <div key={report.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="p-4 flex items-center gap-3">
-                    {/* File Icon */}
-                    <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faUpload} className="text-green-600 text-lg" />
-                    </div>
-
-                    {/* File Info */}
-                    <div className="flex-1 overflow-hidden">
-                      <p className="text-[11px] font-black text-gray-800 truncate">{report.filename}</p>
-                      <p className="text-[9px] text-gray-400 mt-0.5">
-                        {report.fromDate} → {report.toDate}
-                      </p>
-                      <p className="text-[9px] text-gray-300 mt-0.5">
-                        Downloaded: {report.downloadedAt}
-                      </p>
-                    </div>
-
-                    {/* Re-Download Button */}
-                    <button
-                      onClick={() => {
-                        const blob = new Blob([report.csvContent], { type: 'text/csv;charset=utf-8;' })
-                        const url = URL.createObjectURL(blob)
-                        const link = document.createElement('a')
-                        link.href = url
-                        link.download = report.filename
-                        document.body.appendChild(link)
-                        link.click()
-                        document.body.removeChild(link)
-                        URL.revokeObjectURL(url)
-                      }}
-                      className="shrink-0 bg-[#004080] text-white text-[9px] font-black px-3 py-2 rounded-lg shadow active:scale-95 transition-all uppercase"
-                    >
-                      Download
-                    </button>
-                  </div>
+          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+           <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-green-500">Downloaded Reports</h2>
+           {downloadedReports.map(r=>(
+             <div key={r.id} className="bg-white border rounded-xl p-4 mb-3 flex justify-between items-center shadow-sm">
+                <div>
+                   <p className="text-[11px] font-black text-gray-800">{r.filename}</p>
+                   <p className="text-[9px] text-gray-400 mt-0.5">{r.downloadedAt}</p>
                 </div>
-              ))}
-            </div>
-          )}
+                <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
+             </div>
+           ))}
         </div>
       )}
 
+      {/* FOOTER STATS INFO */}
+      <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-100 max-w-md mx-auto"><div className="h-full bg-[#004080] transition-all duration-1000" style={{ width: `${dashboardStats.compliance}%` }}></div></div>
+
       {loading && (
         <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
-          <div className="w-12 h-12 border-4 border-gray-200 border-t-[#004080] rounded-full animate-spin"></div>
-          <p className="mt-4 text-[10px] font-black text-[#004080] uppercase tracking-widest">Processing Data...</p>
+          <div className="w-12 h-12 border-4 border-gray-100 border-t-[#004080] rounded-full animate-spin"></div>
+          <p className="mt-4 text-[10px] font-black text-[#004080] uppercase tracking-widest">Processing...</p>
         </div>
       )}
     </div>

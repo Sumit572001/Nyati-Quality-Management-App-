@@ -3,7 +3,7 @@ import axios from 'axios'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { 
   faChevronDown, faChevronUp, faCheckCircle, faTimesCircle, faClock,
-  faBars, faTimes, faSignOutAlt, faUserCircle, faInfoCircle, faCamera, faCalendarAlt, faEdit, faUserTie, faTrash, faHistory, faHome, faArrowLeft, faImage, faExternalLinkAlt, faSearchPlus, faUserShield, faUserGear, faUpload
+  faBars, faTimes, faSignOutAlt, faUserCircle, faInfoCircle, faCamera, faCalendarAlt, faEdit, faUserTie, faTrash, faHistory, faHome, faArrowLeft, faImage, faExternalLinkAlt, faSearchPlus, faUserShield, faUserGear, faUpload, faExclamationTriangle, faChartLine, faListAlt
 } from '@fortawesome/free-solid-svg-icons'
 
 const BASE_URL = 'http://192.168.12.93:5000'
@@ -18,7 +18,13 @@ function QEIndex() {
   const [loading, setLoading] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  const [view, setView] = useState('main') 
+  const [view, setView] = useState('dashboard') 
+  const [dashboardStats, setDashboardStats] = useState({
+    pendingApprovals: 0,
+    criticalDefects: 0,
+    waitingRework: 0,
+    projectHealth: { approved: 0, pending: 0, returned: 0 }
+  });
   const [reworkApprovals, setReworkApprovals] = useState([])
   const [selectedRework, setSelectedRework] = useState(null)
   const [showHistory, setShowHistory] = useState(false) 
@@ -26,7 +32,6 @@ function QEIndex() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [activeItemIdx, setActiveItemIdx] = useState(null);
   
-  // ✅ NEW: Admin Panel se data lane ke liye states
   const [buildingOptions, setBuildingOptions] = useState([]);
   const [floorOptions, setFloorOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
@@ -41,13 +46,41 @@ function QEIndex() {
   const role = "Quality Engineer"
   const projectSite = user?.siteName || "Nyati Unitree"
 
-  // ✅ Updated useEffect: Dono chize load karega
   useEffect(() => {
     fetchInitialData();
     fetchPendingReports();
+    fetchDashboardStats();
+    
+    const interval = setInterval(fetchDashboardStats, 30000);
+    return () => clearInterval(interval);
   }, [])
 
-  // ✅ NEW: Admin Data Fetch Function
+  const fetchDashboardStats = async () => {
+    try {
+      const resPending = await axios.get(`${BASE_URL}/api/all-reports`);
+      const pending = Array.isArray(resPending.data) ? resPending.data : [];
+      
+      const resRework = await axios.get(`${BASE_URL}/api/qe/rework-approvals`);
+      const reworks = Array.isArray(resRework.data) ? resRework.data : [];
+
+      const today = new Date().toLocaleDateString('en-GB');
+      const criticalToday = pending.filter(r => r.date === today && r.items?.some(i => i.qeDecision === 'fail')).length;
+
+      setDashboardStats({
+        pendingApprovals: pending.length,
+        criticalDefects: criticalToday,
+        waitingRework: reworks.length,
+        projectHealth: {
+          approved: 85,
+          pending: 10,
+          returned: 5
+        }
+      });
+    } catch (err) {
+      console.error("QE Dash stats error", err);
+    }
+  };
+
   const fetchInitialData = async () => {
     try {
       const [resBld, resFlr, resUnit] = await Promise.all([
@@ -301,16 +334,94 @@ function QEIndex() {
       </div>
 
       {/* --- TOP NAVBAR --- */}
-      <div className="flex justify-between items-center p-4 border-b border-gray-100">
+      <div className="flex justify-between items-center p-4 border-b border-gray-100 sticky top-0 bg-white z-40">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] hover:bg-gray-100 rounded-md"><FontAwesomeIcon icon={faBars} className="text-2xl" /></button>
         <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
         <div className="w-10"></div>
       </div>
 
-      {/* --- MAIN CONTENT --- */}
-      {view === 'main' ? (
-        <>
+      {/* --- DASHBOARD VIEW --- */}
+      {/* DASHBOARD VIEW */}
+      {view === 'dashboard' && (
+        <div className="p-4 animate-in fade-in duration-500">
+          {/* USER PROFILE CARD */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-md flex items-center gap-4 mb-6 mt-2 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50/50 rounded-bl-full -mr-10 -mt-10"></div>
+            <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center border-2 border-blue-100 shrink-0 relative z-10">
+              <FontAwesomeIcon icon={faUserGear} className="text-[#004080] text-2xl" />
+            </div>
+            <div className="flex-1 overflow-hidden relative z-10">
+              <h2 className="text-[16px] font-black text-gray-900 uppercase truncate leading-tight">{currentUser}</h2>
+              <div className="flex flex-col gap-0.5 mt-1">
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div> {role}</span>
+                <span className="text-[9px] font-black text-gray-500 uppercase truncate opacity-70 tracking-tight"><FontAwesomeIcon icon={faCalendarAlt} className="mr-1 text-blue-300" /> {projectSite}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center" onClick={() => setView('main')}>
+              <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExternalLinkAlt} className="text-[#004080]" /></div>
+              <p className="text-xl font-black text-gray-900">{pendingReports.length}</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Pending Review</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500">
+               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
+               <p className="text-xl font-black text-red-600">{dashboardStats.criticalDefects}</p>
+               <p className="text-[9px] font-bold text-gray-400 uppercase">Defects Today</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center mb-6" onClick={() => setView('reworks')}>
+             <div className="flex items-center justify-center gap-4">
+                <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center"><FontAwesomeIcon icon={faHistory} className="text-orange-500" /></div>
+                <div className="text-left">
+                   <p className="text-lg font-black text-gray-900 leading-none">{reworkApprovals.length}</p>
+                   <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Waiting for Decision (Reworks)</p>
+                </div>
+             </div>
+          </div>
+
+          {/* PROJECT COMPLIANCE CARD */}
+          <div className="bg-gradient-to-br from-[#004080] to-[#002d5a] p-4 rounded-3xl text-white mb-8 shadow-xl shadow-blue-900/10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
+            <div className="flex justify-between items-center relative z-10">
+              <h2 className="text-[13px] font-black text-white uppercase tracking-wider">PROJECT HEALTH</h2>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black">{dashboardStats.projectHealth.approved}%</span>
+                <span className="text-[8px] font-bold opacity-60 uppercase">Approved</span>
+              </div>
+            </div>
+
+            <div className="mt-4 relative z-10">
+               <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
+                  <span>Progress</span>
+                  <span>Target 100%</span>
+               </div>
+               <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden flex p-0.5">
+                  <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-l-full" style={{ width: `${dashboardStats.projectHealth.approved}%` }}></div>
+                  <div className="h-full bg-blue-400" style={{ width: `${dashboardStats.projectHealth.pending}%` }}></div>
+                  <div className="h-full bg-red-400 rounded-r-full" style={{ width: `${dashboardStats.projectHealth.returned}%` }}></div>
+               </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <button 
+            onClick={() => setView('main')}
+            className="w-full py-5 bg-[#004080] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+          >
+            <FontAwesomeIcon icon={faCheckCircle} />
+            Go to Inspections
+          </button>
+        </div>
+      )}
+
+      {/* --- REVIEW VIEW --- */}
+      {view === 'main' && (
+        <div className="animate-in fade-in duration-500">
           <div className="p-4">
+            <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-black flex items-center gap-2 text-xs uppercase tracking-widest"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button>
             <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-md flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
                 <FontAwesomeIcon icon={faUserTie} className="text-[#004080] text-xl" />
@@ -404,10 +515,13 @@ function QEIndex() {
               </div>
             )}
           </div>
-        </>
-      ) : view === 'reworks' ? (
+        </div>
+      )}
+
+      {/* --- REWORKS VIEW --- */}
+      {view === 'reworks' && (
         <div className="p-4 animate-in slide-in-from-right duration-300">
-           <button onClick={() => setView('main')} className="mb-4 text-[#004080] font-bold flex items-center gap-2"><FontAwesomeIcon icon={faArrowLeft} /> Back to Home</button>
+           <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2"><FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard</button>
            <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-[#004080]">Reworks for Approval</h2>
            {reworkApprovals.length > 0 ? (
              <div className="space-y-4">
@@ -432,8 +546,10 @@ function QEIndex() {
              </div>
            )}
         </div>
-      ) : (
-        /* --- REWORK DETAIL VIEW --- */
+      )}
+
+      {/* --- REWORK DETAIL VIEW --- */}
+      {view === 'rework-detail' && (
         <div className="p-4 animate-in slide-in-from-bottom duration-400 pb-32">
             <button onClick={() => setView('reworks')} className="mb-4 text-[#004080] font-bold flex items-center gap-2 text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back to List</button>
 
@@ -444,115 +560,115 @@ function QEIndex() {
             </div>
 
             <div className="space-y-10 px-2">
-  {selectedRework?.items?.filter(i => i.qeDecision === 'fail').map((item, itemIdx) => (
-    <div key={itemIdx} className="space-y-6">
+              {selectedRework?.items?.filter(i => i.qeDecision === 'fail').map((item, itemIdx) => (
+                <div key={itemIdx} className="space-y-6">
 
-      <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
-        <p className="text-[10px] font-black text-gray-500 uppercase">{item.category}</p>
-        <p className="text-xs font-bold text-gray-800">{item.question}</p>
-      </div>
-
-      <div className="flex flex-col items-start max-w-[90%]">
-        <div className="flex items-center gap-2 mb-1.5 ml-1">
-          <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
-            <FontAwesomeIcon icon={faUserShield} className="text-red-600 text-xs" />
-          </div>
-          <span className="text-[11px] font-black text-gray-500 uppercase">Quality Engineer (Initial)</span>
-        </div>
-        <div className="bg-red-50 border border-red-100 rounded-3xl rounded-tl-none p-4 shadow-sm w-full">
-          <p className="text-[10px] font-black text-red-600 uppercase mb-1 flex items-center gap-1.5">
-            <FontAwesomeIcon icon={faInfoCircle}/> Issue Observed:
-          </p>
-
-          <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
-            {item.observation || 'No observation provided'}
-          </p>
-
-          {item.mediaUrls && item.mediaUrls.length > 0 && (
-            <div className="flex flex-wrap gap-2.5 mb-3">
-              {item.mediaUrls.map((img, idx) => (
-                <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-red-100">
-                  <img
-                    src={getImageUrl(img)}
-                    className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
-                    onClick={() => window.open(getImageUrl(img), '_blank')}
-                    alt="QE Evidence"
-                    onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
-                  />
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <FontAwesomeIcon icon={faSearchPlus} className="text-white"/>
+                  <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase">{item.category}</p>
+                    <p className="text-xs font-bold text-gray-800">{item.question}</p>
                   </div>
+
+                  <div className="flex flex-col items-start max-w-[90%]">
+                    <div className="flex items-center gap-2 mb-1.5 ml-1">
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
+                        <FontAwesomeIcon icon={faUserShield} className="text-red-600 text-xs" />
+                      </div>
+                      <span className="text-[11px] font-black text-gray-500 uppercase">Quality Engineer (Initial)</span>
+                    </div>
+                    <div className="bg-red-50 border border-red-100 rounded-3xl rounded-tl-none p-4 shadow-sm w-full">
+                      <p className="text-[10px] font-black text-red-600 uppercase mb-1 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faInfoCircle}/> Issue Observed:
+                      </p>
+
+                      <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
+                        {item.observation || 'No observation provided'}
+                      </p>
+
+                      {item.mediaUrls && item.mediaUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2.5 mb-3">
+                          {item.mediaUrls.map((img, idx) => (
+                            <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-red-100">
+                              <img
+                                src={getImageUrl(img)}
+                                className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
+                                onClick={() => window.open(getImageUrl(img), '_blank')}
+                                alt="QE Evidence"
+                                onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <FontAwesomeIcon icon={faSearchPlus} className="text-white"/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1 mt-2 text-gray-500 bg-white/50 p-1.5 rounded-lg border border-red-100">
+                        <FontAwesomeIcon icon={faEdit} className="text-[10px]" />
+                        <p className="text-[10px] font-medium leading-tight">
+                          Remark: {item.qeRemark || 'No remark provided.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end ml-auto max-w-[90%]">
+                    <div className="flex items-center gap-2 mb-1.5 mr-1">
+                      <span className="text-[11px] font-black text-gray-500 uppercase">Site Engineer (Action)</span>
+                      <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
+                        <FontAwesomeIcon icon={faUserGear} className="text-green-600 text-xs" />
+                      </div>
+                    </div>
+                    <div className="bg-green-50 border border-green-100 rounded-3xl rounded-tr-none p-4 shadow-sm w-full">
+                      <p className="text-[10px] font-black text-green-600 uppercase mb-1">Work Completion Report:</p>
+
+                      {item.reworkRemark ? (
+                        <>
+                          <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
+                            {item.reworkRemark}
+                          </p>
+
+                          {item.reworkMediaUrls && item.reworkMediaUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2.5 mb-2">
+                              {item.reworkMediaUrls.map((img, idx) => (
+                                <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-green-100">
+                                  <img
+                                    src={getImageUrl(img)}
+                                    className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
+                                    onClick={() => window.open(getImageUrl(img), '_blank')}
+                                    alt="SE Rework"
+                                    onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <FontAwesomeIcon icon={faSearchPlus} className="text-white"/>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center mt-3 pt-2 border-t border-green-100">
+                            <span className="text-[9px] text-gray-500 font-black uppercase tracking-tighter">
+                              <FontAwesomeIcon icon={faCalendarAlt} className="mr-1"/> Submitted
+                            </span>
+                            <span className="text-[9px] font-bold text-green-700 bg-white px-2 py-0.5 rounded-full border border-green-100">
+                              Ready for Review ✅
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+                          <p className="text-[10px] text-yellow-700 font-bold">
+                            ⏳ SE ne abhi rework submit nahi kiya hai
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               ))}
             </div>
-          )}
-
-          <div className="flex items-center gap-1 mt-2 text-gray-500 bg-white/50 p-1.5 rounded-lg border border-red-100">
-            <FontAwesomeIcon icon={faEdit} className="text-[10px]" />
-            <p className="text-[10px] font-medium leading-tight">
-              Remark: {item.qeRemark || 'No remark provided.'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-end ml-auto max-w-[90%]">
-        <div className="flex items-center gap-2 mb-1.5 mr-1">
-          <span className="text-[11px] font-black text-gray-500 uppercase">Site Engineer (Action)</span>
-          <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
-            <FontAwesomeIcon icon={faUserGear} className="text-green-600 text-xs" />
-          </div>
-        </div>
-        <div className="bg-green-50 border border-green-100 rounded-3xl rounded-tr-none p-4 shadow-sm w-full">
-          <p className="text-[10px] font-black text-green-600 uppercase mb-1">Work Completion Report:</p>
-
-          {item.reworkRemark ? (
-            <>
-              <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
-                {item.reworkRemark}
-              </p>
-
-              {item.reworkMediaUrls && item.reworkMediaUrls.length > 0 && (
-                <div className="flex flex-wrap gap-2.5 mb-2">
-                  {item.reworkMediaUrls.map((img, idx) => (
-                    <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-green-100">
-                      <img
-                        src={getImageUrl(img)}
-                        className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
-                        onClick={() => window.open(getImageUrl(img), '_blank')}
-                        alt="SE Rework"
-                        onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
-                      />
-                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <FontAwesomeIcon icon={faSearchPlus} className="text-white"/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex justify-between items-center mt-3 pt-2 border-t border-green-100">
-                <span className="text-[9px] text-gray-500 font-black uppercase tracking-tighter">
-                  <FontAwesomeIcon icon={faCalendarAlt} className="mr-1"/> Submitted
-                </span>
-                <span className="text-[9px] font-bold text-green-700 bg-white px-2 py-0.5 rounded-full border border-green-100">
-                  Ready for Review ✅
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
-              <p className="text-[10px] text-yellow-700 font-bold">
-                ⏳ SE ne abhi rework submit nahi kiya hai
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-    </div>
-  ))}
-</div>
 
             <button 
                 onClick={() => setShowHistory(!showHistory)}
@@ -585,6 +701,13 @@ function QEIndex() {
                     <FontAwesomeIcon icon={faCheckCircle} /> Pass Rework
                 </button>
             </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-[#004080] rounded-full animate-spin"></div>
+          <p className="mt-4 text-[10px] font-black text-[#004080] uppercase tracking-widest">Processing Review...</p>
         </div>
       )}
     </div>
