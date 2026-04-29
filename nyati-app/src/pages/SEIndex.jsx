@@ -177,7 +177,7 @@ function SEIndex() {
       // Calculate Compliance from HISTORY (approved reports)
       const resHist = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
       const history = Array.isArray(resHist.data) ? resHist.data : [];
-      
+
       const totalItems = history.reduce((acc, r) => acc + (r.items?.length || 0), 0);
       const passedItems = history.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
       const compliance = totalItems > 0 ? Math.round((passedItems / totalItems) * 100) : 0;
@@ -400,18 +400,18 @@ function SEIndex() {
 
   const submitRework = async () => {
     if (!reworkRemark) return alert("Remark likhiye!");
-    
+
     // Server expects 'id', 'itemsData' (JSON string), and 'media' files
     const formData = new FormData();
     formData.append('id', selectedRework.reportId);
-    
+
     const itemsData = [{
       index: selectedRework.itemIdx,
       reworkRemark: reworkRemark,
       fileCount: reworkPhotos.length
     }];
     formData.append('itemsData', JSON.stringify(itemsData));
-    
+
     reworkPhotos.forEach(p => formData.append('media', p.file));
 
     try {
@@ -608,7 +608,7 @@ function SEIndex() {
                     </div>
                     <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Quality Engineer Feedback</p>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">Issue Observed</p>
@@ -632,7 +632,7 @@ function SEIndex() {
                         <div className="flex flex-wrap gap-2">
                           {selectedRework.mediaUrls.map((p, i) => (
                             <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:scale-105 transition-transform" onClick={() => window.open(getImageUrl(p), '_blank')}>
-                              <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="qe evidence" onError={(e) => e.target.src="https://via.placeholder.com/100?text=Error"} />
+                              <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="qe evidence" onError={(e) => e.target.src = "https://via.placeholder.com/100?text=Error"} />
                             </div>
                           ))}
                         </div>
@@ -649,12 +649,12 @@ function SEIndex() {
                     <span>Status Remark</span>
                     <span className="text-blue-500">{reworkRemark.length}/500</span>
                   </label>
-                  <textarea 
-                    className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-[#004080] outline-none transition-all shadow-inner bg-gray-50/50" 
-                    rows="3" 
-                    placeholder="Explain what was fixed..." 
-                    value={reworkRemark} 
-                    onChange={(e) => setReworkRemark(e.target.value)} 
+                  <textarea
+                    className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-[#004080] outline-none transition-all shadow-inner bg-gray-50/50"
+                    rows="3"
+                    placeholder="Explain what was fixed..."
+                    value={reworkRemark}
+                    onChange={(e) => setReworkRemark(e.target.value)}
                   />
                 </div>
 
@@ -685,9 +685,9 @@ function SEIndex() {
                 </div>
               </div>
 
-              <button 
-                onClick={submitRework} 
-                className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50 mt-4" 
+              <button
+                onClick={submitRework}
+                className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50 mt-4"
                 disabled={loading || reworkPhotos.length === 0}
               >
                 <FontAwesomeIcon icon={loading ? faClock : faCheckCircle} />
@@ -859,46 +859,46 @@ function SEIndex() {
       {/* TODAY TASKS LIST VIEW */}
       {view === 'today-tasks' && (
         <div className="p-4 animate-in slide-in-from-right duration-500 mb-20 text-left">
-           <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+          <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
             <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
           </button>
-          
+
           <h2 className="text-sm font-black text-[#004080] uppercase mb-6 tracking-widest pl-3 border-l-4 border-[#004080] flex items-center justify-between">
             <span>Today's Submissions</span>
             <span className="text-[10px] bg-blue-50 px-2 py-0.5 rounded-full">{todayReports.length}</span>
           </h2>
 
           <div className="space-y-4">
-             {todayReports.length > 0 ? todayReports.map((r, i) => (
-                <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-blue-100 transition-all group">
-                   <div className="flex justify-between items-start mb-3">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-[#004080] uppercase tracking-widest mb-1">{r.projectName}</span>
-                        <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${r.status === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
-                        {r.status}
-                      </div>
-                   </div>
-                   
-                   <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
-                          <FontAwesomeIcon icon={faClock} className="text-gray-400 text-xs" />
-                        </div>
-                        <p className="text-[10px] font-bold text-gray-400">{r.submittedAt || "Just now"}</p>
-                      </div>
-                      <div className="text-[10px] font-black text-gray-400 italic">
-                        {r.items?.length || 0} Checkpoints
-                      </div>
-                   </div>
+            {todayReports.length > 0 ? todayReports.map((r, i) => (
+              <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-blue-100 transition-all group">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-[#004080] uppercase tracking-widest mb-1">{r.projectName}</span>
+                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${r.status === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                    {r.status}
+                  </div>
                 </div>
-             )) : (
-                <div className="py-20 flex flex-col items-center justify-center text-gray-300">
-                    <FontAwesomeIcon icon={faListAlt} size="3x" className="mb-4 opacity-20" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">No reports submitted today</p>
+
+                <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
+                      <FontAwesomeIcon icon={faClock} className="text-gray-400 text-xs" />
+                    </div>
+                    <p className="text-[10px] font-bold text-gray-400">{r.submittedAt || "Just now"}</p>
+                  </div>
+                  <div className="text-[10px] font-black text-gray-400 italic">
+                    {r.items?.length || 0} Checkpoints
+                  </div>
                 </div>
-             )}
+              </div>
+            )) : (
+              <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                <FontAwesomeIcon icon={faListAlt} size="3x" className="mb-4 opacity-20" />
+                <p className="text-[10px] font-black uppercase tracking-widest">No reports submitted today</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -906,51 +906,51 @@ function SEIndex() {
       {/* PENDING APPROVAL LIST VIEW */}
       {view === 'pending-approval' && (
         <div className="p-4 animate-in slide-in-from-right duration-500 mb-20 text-left">
-           <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+          <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
             <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
           </button>
-          
+
           <h2 className="text-sm font-black text-[#004080] uppercase mb-6 tracking-widest pl-3 border-l-4 border-orange-500 flex items-center justify-between">
             <span>In Review by QE</span>
             <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-black">{pendingReports.length}</span>
           </h2>
 
           <div className="space-y-4">
-             {pendingReports.length > 0 ? pendingReports.map((r, i) => (
-                <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-orange-100 transition-all group">
-                   <div className="flex justify-between items-start mb-3">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">{r.projectName}</span>
-                        <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
-                      </div>
-                      <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter bg-orange-50 text-orange-600 animate-pulse">
-                        In Review
-                      </div>
-                   </div>
-                   
-                   <p className="text-[10px] font-bold text-gray-500 mb-4">{r.location} | {r.unitType}</p>
+            {pendingReports.length > 0 ? pendingReports.map((r, i) => (
+              <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-orange-100 transition-all group">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">{r.projectName}</span>
+                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                  </div>
+                  <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter bg-orange-50 text-orange-600 animate-pulse">
+                    In Review
+                  </div>
+                </div>
 
-                   <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
-                          <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-400 text-xs" />
-                        </div>
-                        <div className="flex flex-col">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Sent On</p>
-                          <p className="text-[10px] font-black text-gray-700">{r.date} at {r.submittedAt?.split(',')[1] || r.submittedAt}</p>
-                        </div>
-                      </div>
-                      <div className="text-[10px] font-black text-gray-400 italic">
-                        {r.items?.length || 0} Items
-                      </div>
-                   </div>
+                <p className="text-[10px] font-bold text-gray-500 mb-4">{r.location} | {r.unitType}</p>
+
+                <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
+                      <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-400 text-xs" />
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Sent On</p>
+                      <p className="text-[10px] font-black text-gray-700">{r.date} at {r.submittedAt?.split(',')[1] || r.submittedAt}</p>
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-black text-gray-400 italic">
+                    {r.items?.length || 0} Items
+                  </div>
                 </div>
-             )) : (
-                <div className="py-20 flex flex-col items-center justify-center text-gray-300">
-                    <FontAwesomeIcon icon={faClock} size="3x" className="mb-4 opacity-20" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">No reports pending for approval</p>
-                </div>
-             )}
+              </div>
+            )) : (
+              <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                <FontAwesomeIcon icon={faClock} size="3x" className="mb-4 opacity-20" />
+                <p className="text-[10px] font-black uppercase tracking-widest">No reports pending for approval</p>
+              </div>
+            )}
           </div>
         </div>
       )}
