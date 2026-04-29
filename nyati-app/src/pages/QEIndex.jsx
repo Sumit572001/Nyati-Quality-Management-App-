@@ -18,17 +18,19 @@ function QEIndex() {
   const [loading, setLoading] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  const [view, setView] = useState('dashboard') 
+  const [view, setView] = useState('dashboard') // 'dashboard', 'main', 'reworks', 'rework-detail'
+  const [reworkFilter, setReworkFilter] = useState('approval') // 'approval' or 'waiting'
   const [dashboardStats, setDashboardStats] = useState({
-    pendingApprovals: 0,
-    criticalDefects: 0,
+    pendingReview: 0,
+    todayChecklist: 0,
     waitingRework: 0,
-    projectHealth: { approved: 0, pending: 0, returned: 0 }
+    projectHealth: { approved: 85, pending: 10, returned: 5 }
   });
   const [reworkApprovals, setReworkApprovals] = useState([])
+  const [returnedReports, setReturnedReports] = useState([])
   const [selectedRework, setSelectedRework] = useState(null)
   const [showHistory, setShowHistory] = useState(false) 
-
+  const [filterType, setFilterType] = useState('all') // 'all', 'today', 'pending'
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [activeItemIdx, setActiveItemIdx] = useState(null);
   
@@ -57,19 +59,30 @@ function QEIndex() {
 
   const fetchDashboardStats = async () => {
     try {
-      const resPending = await axios.get(`${BASE_URL}/api/all-reports`);
-      const pending = Array.isArray(resPending.data) ? resPending.data : [];
-      
-      const resRework = await axios.get(`${BASE_URL}/api/qe/rework-approvals`);
-      const reworks = Array.isArray(resRework.data) ? resRework.data : [];
+      const [resPending, resRework, resReturned] = await Promise.allSettled([
+        axios.get(`${BASE_URL}/api/all-reports`),
+        axios.get(`${BASE_URL}/api/qe/rework-approvals`),
+        axios.get(`${BASE_URL}/api/qe/returned-reports`)
+      ]);
 
-      const today = new Date().toLocaleDateString('en-GB');
-      const criticalToday = pending.filter(r => r.date === today && r.items?.some(i => i.qeDecision === 'fail')).length;
+      const pending = resPending.status === 'fulfilled' && Array.isArray(resPending.value.data) ? resPending.value.data : [];
+      const reworks = resRework.status === 'fulfilled' && Array.isArray(resRework.value.data) ? resRework.value.data : [];
+      const returned = resReturned.status === 'fulfilled' && Array.isArray(resReturned.value.data) ? resReturned.value.data : [];
+
+      setPendingReports(pending);
+      setReworkApprovals(reworks);
+      setReturnedReports(returned);
+
+      const d = new Date();
+      const today = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      
+      const todayCount = pending.filter(r => r.date === today).length;
+      const olderCount = pending.filter(r => r.date !== today).length;
 
       setDashboardStats({
-        pendingApprovals: pending.length,
-        criticalDefects: criticalToday,
-        waitingRework: reworks.length,
+        pendingReview: olderCount,
+        todayChecklist: todayCount,
+        waitingRework: returned.length,
         projectHealth: {
           approved: 85,
           pending: 10,
@@ -325,8 +338,14 @@ function QEIndex() {
               </div>
             </div>
             <nav className="space-y-4">
-              <button onClick={() => { setView('main'); setIsSidebarOpen(false); }} className="w-full text-left p-2 hover:bg-white/10 rounded-md transition-colors flex items-center gap-3"><FontAwesomeIcon icon={faHome} /> Home</button>
-              <button onClick={fetchReworkApprovals} className="w-full text-left p-2 hover:bg-white/10 rounded-md transition-colors flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> Reworks for Approval</button>
+              <button onClick={() => { setView('dashboard'); setIsSidebarOpen(false); }} className="w-full text-left p-2 hover:bg-white/10 rounded-md transition-colors flex items-center gap-3"><FontAwesomeIcon icon={faHome} /> Home</button>
+              <button onClick={() => { setView('reworks'); setReworkFilter('approval'); setIsSidebarOpen(false); }} className="w-full text-left p-2 hover:bg-white/10 rounded-md transition-colors flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FontAwesomeIcon icon={faHistory} />
+                  <span>Reworks for Approval</span>
+                </div>
+                {reworkApprovals.length > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{reworkApprovals.length}</span>}
+              </button>
               <button onClick={handleLogout} className="w-full text-left p-2 hover:bg-red-500 rounded-md transition-colors flex items-center gap-3 mt-10 text-red-200"><FontAwesomeIcon icon={faSignOutAlt} /> Sign Out</button>
             </nav>
           </div>
@@ -335,13 +354,17 @@ function QEIndex() {
 
       {/* --- TOP NAVBAR --- */}
       <div className="flex justify-between items-center p-4 border-b border-gray-100 sticky top-0 bg-white z-40">
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] hover:bg-gray-100 rounded-md"><FontAwesomeIcon icon={faBars} className="text-2xl" /></button>
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] hover:bg-gray-100 rounded-md relative">
+          <FontAwesomeIcon icon={faBars} className="text-2xl" />
+          {reworkApprovals.length > 0 && (
+            <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping border-2 border-white"></span>
+          )}
+        </button>
         <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
         <div className="w-10"></div>
       </div>
 
       {/* --- DASHBOARD VIEW --- */}
-      {/* DASHBOARD VIEW */}
       {view === 'dashboard' && (
         <div className="p-4 animate-in fade-in duration-500">
           {/* USER PROFILE CARD */}
@@ -360,60 +383,34 @@ function QEIndex() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center" onClick={() => setView('main')}>
-              <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExternalLinkAlt} className="text-[#004080]" /></div>
-              <p className="text-xl font-black text-gray-900">{pendingReports.length}</p>
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-orange-400 cursor-pointer active:scale-95 transition-transform" onClick={() => { setView('main'); setFilterType('pending'); }}>
+              <div className="w-10 h-10 bg-orange-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faClock} className="text-orange-500" /></div>
+              <p className="text-xl font-black text-gray-900">{dashboardStats.pendingReview}</p>
               <p className="text-[9px] font-bold text-gray-400 uppercase">Pending Review</p>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500">
-               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
-               <p className="text-xl font-black text-red-600">{dashboardStats.criticalDefects}</p>
-               <p className="text-[9px] font-bold text-gray-400 uppercase">Defects Today</p>
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-blue-500 cursor-pointer active:scale-95 transition-transform" onClick={() => { setView('main'); setFilterType('today'); }}>
+               <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faListAlt} className="text-blue-500" /></div>
+               <p className="text-xl font-black text-blue-600">{dashboardStats.todayChecklist}</p>
+               <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Today's Checklist</p>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center mb-6" onClick={() => setView('reworks')}>
-             <div className="flex items-center justify-center gap-4">
-                <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center"><FontAwesomeIcon icon={faHistory} className="text-orange-500" /></div>
-                <div className="text-left">
-                   <p className="text-lg font-black text-gray-900 leading-none">{reworkApprovals.length}</p>
-                   <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">Waiting for Decision (Reworks)</p>
+          {/* REWORKS CARD */}
+          <div onClick={() => { setView('reworks'); setReworkFilter('waiting'); }} className="bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-orange-200 transition-all cursor-pointer group mb-10">
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-5">
+                   <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
+                      <FontAwesomeIcon icon={faHistory} size="xl" />
+                   </div>
+                   <div>
+                      <p className="text-xl font-black text-gray-900 leading-none">{returnedReports.length}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Waiting for Decision (Reworks)</p>
+                   </div>
                 </div>
              </div>
           </div>
 
-          {/* PROJECT COMPLIANCE CARD */}
-          <div className="bg-gradient-to-br from-[#004080] to-[#002d5a] p-4 rounded-3xl text-white mb-8 shadow-xl shadow-blue-900/10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <h2 className="text-[13px] font-black text-white uppercase tracking-wider">PROJECT HEALTH</h2>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-black">{dashboardStats.projectHealth.approved}%</span>
-                <span className="text-[8px] font-bold opacity-60 uppercase">Approved</span>
-              </div>
-            </div>
 
-            <div className="mt-4 relative z-10">
-               <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
-                  <span>Progress</span>
-                  <span>Target 100%</span>
-               </div>
-               <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden flex p-0.5">
-                  <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-l-full" style={{ width: `${dashboardStats.projectHealth.approved}%` }}></div>
-                  <div className="h-full bg-blue-400" style={{ width: `${dashboardStats.projectHealth.pending}%` }}></div>
-                  <div className="h-full bg-red-400 rounded-r-full" style={{ width: `${dashboardStats.projectHealth.returned}%` }}></div>
-               </div>
-            </div>
-          </div>
-
-          {/* Action Button */}
-          <button 
-            onClick={() => setView('main')}
-            className="w-full py-5 bg-[#004080] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
-          >
-            <FontAwesomeIcon icon={faCheckCircle} />
-            Go to Inspections
-          </button>
         </div>
       )}
 
@@ -421,47 +418,10 @@ function QEIndex() {
       {view === 'main' && (
         <div className="animate-in fade-in duration-500">
           <div className="p-4">
-            <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-black flex items-center gap-2 text-xs uppercase tracking-widest"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button>
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-md flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-                <FontAwesomeIcon icon={faUserTie} className="text-[#004080] text-xl" />
-              </div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-[15px] font-black text-gray-900 uppercase leading-none tracking-tight">{currentUser}</h2>
-                    <p className="text-[10px] font-bold text-blue-600 mt-1.5 uppercase tracking-wider">Designation: {role}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter mb-0.5">Project Site</p>
-                    <p className="text-[10px] font-black text-gray-800 leading-tight max-w-[100px]">{selectedReport ? selectedReport.projectName : projectSite}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-4">
-            <label className="block font-bold text-gray-700 mb-2 text-[10px] uppercase tracking-widest">Checklist Selection</label>
-            <div className="relative mb-4">
-              <div onClick={() => setShowDropdown(!showDropdown)} className="w-full p-3 border border-gray-400 rounded-lg flex justify-between items-center bg-white shadow-sm cursor-pointer">
-                <span className={`text-sm font-bold ${selectedReport ? 'text-[#004080]' : 'text-gray-400'}`}>
-                {selectedReport ? `${selectedReport.block} - ${selectedReport.floor} (${selectedReport.unitType || ''})` : '-- SELECT PENDING CHECKLIST --'} 
-                </span>
-                <FontAwesomeIcon icon={showDropdown ? faChevronUp : faChevronDown} className="text-gray-500" />
-              </div>
-              {showDropdown && (
-                <div className="absolute z-10 w-full mt-1 border rounded-md bg-white shadow-xl max-h-60 overflow-y-auto">
-                  {pendingReports.length > 0 ? pendingReports.map((report) => (
-                    <div key={report._id} onClick={() => { setSelectedReport(report); setShowDropdown(false); }} className="p-3 border-b hover:bg-blue-50 cursor-pointer text-xs font-bold text-gray-700">
-                     {report.block} | {report.floor} | {report.unitType || 'N/A'} | {report.location}
-                  </div>
-                  )) : (
-                    <div className="p-4 text-center text-gray-400 text-xs font-bold">No reports pending</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <button onClick={() => { setView('dashboard'); setSelectedReport(null); }} className="mb-4 text-[#004080] font-black flex items-center gap-2 text-xs uppercase tracking-widest"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button>
+            <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-[#004080]">
+              {filterType === 'today' ? "Today's Checklist Review" : "Pending Checklists Review"}
+            </h2>
 
             {selectedReport ? (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -509,10 +469,38 @@ function QEIndex() {
                 </button>
               </div>
             ) : (
-              <div className="mt-32 text-center text-gray-400 flex flex-col items-center opacity-60">
-                  <FontAwesomeIcon icon={faClock} size="3x" className="mb-4" />
-                  <p className="text-xs font-semibold">Please select a checklist to start review.</p>
-              </div>
+                <div className="space-y-4 animate-in fade-in duration-500">
+                  {pendingReports.filter(r => {
+                    const today = new Date().toLocaleDateString('en-GB');
+                    if (filterType === 'today') return r.date === today;
+                    if (filterType === 'pending') return r.date !== today;
+                    return true;
+                  }).length > 0 ? (
+                    pendingReports.filter(r => {
+                      const today = new Date().toLocaleDateString('en-GB');
+                      if (filterType === 'today') return r.date === today;
+                      if (filterType === 'pending') return r.date !== today;
+                      return true;
+                    }).map((report, idx) => (
+                      <div key={idx} onClick={() => setSelectedReport(report)} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer group">
+                        <div className="flex justify-between items-start mb-2">
+                           <span className="text-[10px] font-bold bg-blue-50 text-[#004080] px-2 py-0.5 rounded uppercase">{report.block} | {report.floor}</span>
+                           <span className="text-[10px] text-gray-400">{report.date}</span>
+                        </div>
+                        <p className="text-xs font-black text-gray-800 group-hover:text-[#004080] transition-colors">{report.projectName}</p>
+                        <p className="text-[10px] text-gray-500 mt-1 font-bold italic">{report.location} | {report.unitType || 'N/A'}</p>
+                        <div className="mt-3 flex items-center justify-end">
+                           <button className="text-[9px] font-black text-[#004080] uppercase flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">Open Checklist <FontAwesomeIcon icon={faExternalLinkAlt} /></button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="mt-20 text-center text-gray-400 opacity-60 flex flex-col items-center">
+                       <FontAwesomeIcon icon={faClock} size="3x" className="mb-4" />
+                       <p className="text-xs font-semibold">No checklists found for this category.</p>
+                    </div>
+                  )}
+                </div>
             )}
           </div>
         </div>
@@ -522,27 +510,38 @@ function QEIndex() {
       {view === 'reworks' && (
         <div className="p-4 animate-in slide-in-from-right duration-300">
            <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold flex items-center gap-2"><FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard</button>
-           <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-[#004080]">Reworks for Approval</h2>
-           {reworkApprovals.length > 0 ? (
+           <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-[#004080]">
+             {reworkFilter === 'approval' ? "Reworks for Approval" : "Waiting for SE Action"}
+           </h2>
+           {(reworkFilter === 'approval' ? reworkApprovals : returnedReports).length > 0 ? (
              <div className="space-y-4">
-               {reworkApprovals.map((report, idx) => (
-                 <div key={idx} onClick={() => { setSelectedRework(report); setView('rework-detail'); }} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer">
+               {(reworkFilter === 'approval' ? reworkApprovals : returnedReports).map((report, idx) => (
+                 <div key={idx} onClick={() => { setSelectedRework(report); setView('rework-detail'); }} className={`bg-white border rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer ${reworkFilter === 'waiting' ? 'border-l-4 border-l-orange-400' : 'border-gray-200'}`}>
                     <div className="flex justify-between items-start mb-2">
-                       <span className="text-[10px] font-bold bg-blue-100 text-[#004080] px-2 py-0.5 rounded uppercase">{report.block} | {report.floor}</span>
+                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${reworkFilter === 'approval' ? 'bg-blue-100 text-[#004080]' : 'bg-orange-50 text-orange-600'}`}>
+                         {report.block} | {report.floor}
+                       </span>
                        <span className="text-[10px] text-gray-400">{report.date}</span>
                     </div>
                     <p className="text-xs font-bold text-gray-800">{report.projectName}</p>
-                    <p className="text-[10px] text-gray-500 mt-1">Item: {report.itemName || "Checklist Item"}</p>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      {reworkFilter === 'approval' ? `Item: ${report.itemName || "Checklist Item"}` : `Observations: ${report.items?.filter(i => i.qeDecision === 'fail').length} issues`}
+                    </p>
                     <div className="mt-3 flex items-center justify-between">
-                       <span className="text-[10px] text-green-600 font-bold italic">● Action Taken by SE</span>
-                       <button className="text-[10px] font-black text-[#004080] uppercase flex items-center gap-1">Review <FontAwesomeIcon icon={faExternalLinkAlt} /></button>
+                       <span className={`text-[10px] font-bold italic ${reworkFilter === 'approval' ? 'text-green-600' : 'text-orange-500'}`}>
+                         {reworkFilter === 'approval' ? '● Action Taken by SE' : '● Pending with Site Engineer'}
+                       </span>
+                       <button className="text-[10px] font-black text-[#004080] uppercase flex items-center gap-1">
+                         {reworkFilter === 'approval' ? "Review" : "View Details"} <FontAwesomeIcon icon={faExternalLinkAlt} />
+                       </button>
                     </div>
                  </div>
                ))}
              </div>
            ) : (
              <div className="mt-20 text-center text-gray-400 opacity-60">
-                <FontAwesomeIcon icon={faHistory} size="3x" className="mb-4" /><p className="text-xs font-semibold">No reworks pending.</p>
+                <FontAwesomeIcon icon={faHistory} size="3x" className="mb-4" />
+                <p className="text-xs font-semibold">No reworks {reworkFilter === 'approval' ? 'pending approval' : 'in waiting'}.</p>
              </div>
            )}
         </div>

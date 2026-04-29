@@ -4,7 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faChevronDown, faChevronUp, faCheckCircle, faArrowLeft, faCheckSquare, faSquare,
   faBars, faTimes, faSignOutAlt, faUserCircle, faHistory, faHome, faInfoCircle, faUserTie, faCalendarAlt,
-  faCamera, faUpload, faTrash, faExclamationTriangle, faPlus, faChartLine, faListAlt, faTrophy, faCheck
+  faCamera, faUpload, faTrash, faExclamationTriangle, faPlus, faChartLine, faListAlt, faTrophy, faCheck,
+  faClock, faImage
 } from '@fortawesome/free-solid-svg-icons'
 
 const BASE_URL = 'http://192.168.12.93:5000'
@@ -110,6 +111,7 @@ function SEIndex() {
   const [view, setView] = useState('dashboard')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [reworkReports, setReworkReports] = useState([])
+  const [pendingReports, setPendingReports] = useState([])
   const [historyReports, setHistoryReports] = useState([])
   const [reportData, setReportData] = useState([])
   const [fromDate, setFromDate] = useState('')
@@ -120,6 +122,7 @@ function SEIndex() {
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
   const [categorySelection, setCategorySelection] = useState({});
+  const [todayReports, setTodayReports] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
     todayTasks: 0,
     reworkCount: 0,
@@ -153,21 +156,34 @@ function SEIndex() {
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
-      const allReports = Array.isArray(res.data) ? res.data : [];
+      // Use the reliable 'my-reports' endpoint
+      const resAll = await axios.get(`${BASE_URL}/api/my-reports?user=${encodeURIComponent(currentUser)}`);
+      const allReports = Array.isArray(resAll.data) ? resAll.data : [];
 
-      const today = new Date().toLocaleDateString('en-GB');
-      const todayTasks = allReports.filter(r => (r.submittedAt || r.date)?.includes(today)).length;
+      // Filter for today's tasks
+      const d = new Date();
+      const todayString = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      const todaySubmissions = allReports.filter(r => r.date === todayString);
+      setTodayReports(todaySubmissions);
 
+      // Filter for Pending reports (QE hasn't acted yet)
+      const pending = allReports.filter(r => r.status && r.status.toLowerCase() === 'pending');
+      setPendingReports(pending);
+
+      // Fetch Reworks
       const resRework = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
       const reworks = Array.isArray(resRework.data) ? resRework.data : [];
 
-      const totalItems = allReports.reduce((acc, r) => acc + (r.items?.length || 0), 0);
-      const passedItems = allReports.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
+      // Calculate Compliance from HISTORY (approved reports)
+      const resHist = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
+      const history = Array.isArray(resHist.data) ? resHist.data : [];
+      
+      const totalItems = history.reduce((acc, r) => acc + (r.items?.length || 0), 0);
+      const passedItems = history.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
       const compliance = totalItems > 0 ? Math.round((passedItems / totalItems) * 100) : 0;
 
       setDashboardStats({
-        todayTasks: todayTasks,
+        todayTasks: todaySubmissions.length,
         reworkCount: reworks.length,
         compliance: compliance,
         recentActivity: allReports.slice(0, 5)
@@ -284,6 +300,24 @@ function SEIndex() {
     }
   }
 
+  const fetchPendingReports = async () => {
+    try {
+      setLoading(true);
+      // Using the already working 'my-reports' endpoint to avoid potential 404 errors if server hasn't restarted
+      const res = await axios.get(`${BASE_URL}/api/my-reports?user=${encodeURIComponent(currentUser)}`);
+      const allReports = Array.isArray(res.data) ? res.data : [];
+      const pending = allReports.filter(r => r.status && r.status.toLowerCase() === 'pending');
+      setPendingReports(pending);
+      setView('pending-approval');
+      setIsSidebarOpen(false);
+    } catch (err) {
+      console.error("Pending list error:", err);
+      alert("Pending list fail!");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const fetchHistoryReports = async () => {
     try {
       setLoading(true);
@@ -366,11 +400,19 @@ function SEIndex() {
 
   const submitRework = async () => {
     if (!reworkRemark) return alert("Remark likhiye!");
+    
+    // Server expects 'id', 'itemsData' (JSON string), and 'media' files
     const formData = new FormData();
-    formData.append('reportId', selectedRework.reportId);
-    formData.append('itemIndex', selectedRework.itemIdx);
-    formData.append('reworkRemark', reworkRemark);
-    reworkPhotos.forEach(p => formData.append('reworkMedia', p.file));
+    formData.append('id', selectedRework.reportId);
+    
+    const itemsData = [{
+      index: selectedRework.itemIdx,
+      reworkRemark: reworkRemark,
+      fileCount: reworkPhotos.length
+    }];
+    formData.append('itemsData', JSON.stringify(itemsData));
+    
+    reworkPhotos.forEach(p => formData.append('media', p.file));
 
     try {
       setLoading(true);
@@ -379,6 +421,7 @@ function SEIndex() {
       fetchReworkReports();
       fetchDashboardStats();
     } catch (err) {
+      console.error("Rework submit error:", err);
       alert("Rework submission failed!");
     } finally {
       setLoading(false);
@@ -410,6 +453,10 @@ function SEIndex() {
               <div className="flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> <span>Pending Reworks</span></div>
               {reworkReports.length > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{reworkReports.length}</span>}
             </button>
+            <button onClick={fetchPendingReports} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center justify-between">
+              <div className="flex items-center gap-3"><FontAwesomeIcon icon={faClock} /> <span>Pending Approval</span></div>
+              {pendingReports.length > 0 && <span className="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full">{pendingReports.length}</span>}
+            </button>
             <button onClick={fetchHistoryReports} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faCheckCircle} /> History</button>
             <button onClick={() => { setView('report'); setReportView('filter'); setFromDate(''); setReportData([]); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faUpload} /> Report</button>
             <button onClick={() => { setView('downloadReport'); setIsSidebarOpen(false); }} className="w-full text-left p-3 hover:bg-white/10 rounded-md flex items-center gap-3"><FontAwesomeIcon icon={faHistory} /> Report Download</button>
@@ -424,7 +471,10 @@ function SEIndex() {
           <FontAwesomeIcon icon={faBars} className="text-2xl" />
           {reworkReports.length > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>}
         </button>
-        <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
+        <div className="flex flex-col items-center">
+          <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
+          <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mt-0.5">System Updated v2.1</span>
+        </div>
         <div className="w-10"></div>
       </div>
 
@@ -446,44 +496,19 @@ function SEIndex() {
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center">
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center active:scale-95 transition-all cursor-pointer" onClick={() => setView('today-tasks')}>
               <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faListAlt} className="text-[#004080]" /></div>
               <p className="text-xl font-black text-gray-900">{dashboardStats.todayTasks}</p>
-              <p className="text-[9px] font-bold text-gray-400 uppercase">Tasks Today</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase">Today's Checklist</p>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500" onClick={fetchReworkReports}>
+            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500 active:scale-95 transition-all cursor-pointer" onClick={fetchReworkReports}>
               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
               <p className="text-xl font-black text-red-600">{dashboardStats.reworkCount}</p>
               <p className="text-[9px] font-bold text-gray-400 uppercase">Reworks</p>
             </div>
           </div>
 
-          {/* QUALITY SCORE CARD */}
-          <div className="bg-gradient-to-br from-[#004080] to-[#002d5a] p-4 rounded-3xl text-white mb-8 shadow-xl shadow-blue-900/10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
-            <div className="flex justify-between items-center relative z-10">
-              <h2 className="text-[13px] font-black text-white uppercase tracking-wider">SITE COMPLIANCE</h2>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-black">{dashboardStats.compliance}%</span>
-                <span className="text-[8px] font-bold opacity-60 uppercase">Score</span>
-              </div>
-            </div>
-
-            <div className="mt-4 relative z-10">
-              <div className="flex justify-between text-[7px] font-black uppercase mb-1 opacity-50 tracking-widest">
-                <span>Progress</span>
-                <span>Target 100%</span>
-              </div>
-              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
-                <div
-                  className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-1000"
-                  style={{ width: `${dashboardStats.compliance}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
           <div className="mb-20">
             <div className="flex justify-between mb-4"><h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
             <div className="space-y-3">
@@ -558,9 +583,118 @@ function SEIndex() {
 
       {/* REWORK FORM */}
       {view === 'rework-form' && selectedRework && (
-        <div className="p-4 animate-in slide-in-from-bottom duration-400 mb-32">
-          <button onClick={() => setView('rework')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-          <div className="bg-white border rounded-2xl shadow-2xl overflow-hidden mb-10"><div className="bg-[#004080] text-white p-5"><div className="text-[10px] opacity-60 uppercase font-black">{selectedRework.category}</div><div className="font-black text-sm mt-1">{selectedRework.question}</div></div><div className="p-5 space-y-6"><div className="bg-red-50 p-4 rounded-xl border border-red-100"><p className="text-[10px] font-black text-red-600 uppercase mb-2">QE Observation:</p><p className="text-xs font-bold text-gray-800">{selectedRework.observation || 'Checking quality standard...'}</p></div><div className="space-y-2"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status Remark</label><textarea className="w-full border-2 border-gray-100 rounded-xl p-4 text-sm focus:border-[#004080] outline-none" rows="3" placeholder="Explain what was fixed..." value={reworkRemark} onChange={(e) => setReworkRemark(e.target.value)} /></div><div className="space-y-3"><div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase ml-1">Evidence Photos</label><label className="bg-blue-50 text-[#004080] p-3 rounded-full cursor-pointer active:scale-90 transition-all shadow-sm"><FontAwesomeIcon icon={faCamera} size="lg" /><input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} /></label></div><div className="flex flex-wrap gap-2">{reworkPhotos.map((p, i) => (<div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-gray-100 shadow-sm"><img src={p.url} className="w-full h-full object-cover" /><button onClick={() => setReworkPhotos(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-red-600 text-white w-6 h-6 flex items-center justify-center text-[10px] shadow-lg"><FontAwesomeIcon icon={faTimes} /></button></div>))}</div></div><button onClick={submitRework} className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/20" disabled={loading}>{loading ? 'Submitting...' : 'Submit to QE'}</button></div></div>
+        <div className="p-4 animate-in slide-in-from-bottom duration-400 mb-32 text-left">
+          <button onClick={() => setView('rework')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+            <FontAwesomeIcon icon={faArrowLeft} /> Back to List
+          </button>
+
+          <div className="bg-white border rounded-3xl shadow-2xl overflow-hidden mb-10 border-gray-100">
+            <div className="bg-[#004080] text-white p-5">
+              <div className="flex justify-between items-start">
+                <div className="text-[10px] opacity-60 uppercase font-black tracking-widest">{selectedRework.category}</div>
+                <div className="px-2 py-0.5 bg-red-500/20 rounded-md text-[8px] font-black uppercase text-red-200 border border-red-500/30">Action Required</div>
+              </div>
+              <div className="font-black text-[15px] mt-2 leading-snug">{selectedRework.question}</div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* QE FEEDBACK SECTION */}
+              <div className="bg-red-50/50 p-5 rounded-2xl border border-red-100/50 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-red-100/20 rounded-bl-full -mr-12 -mt-12"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                      <FontAwesomeIcon icon={faInfoCircle} className="text-red-600 text-[10px]" />
+                    </div>
+                    <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Quality Engineer Feedback</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">Issue Observed</p>
+                      <p className="text-sm font-black text-gray-800 leading-tight bg-white p-3 rounded-xl border border-red-100/50 shadow-sm italic">
+                        "{selectedRework.observation || 'Please check quality again.'}"
+                      </p>
+                    </div>
+
+                    {selectedRework.qeRemark && (
+                      <div>
+                        <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">QE Remarks</p>
+                        <p className="text-xs font-bold text-gray-600 bg-white/40 p-2 rounded-lg leading-relaxed">
+                          {selectedRework.qeRemark}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedRework.mediaUrls && selectedRework.mediaUrls.length > 0 && (
+                      <div className="pt-2">
+                        <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-2">Evidence from QE</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedRework.mediaUrls.map((p, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:scale-105 transition-transform" onClick={() => window.open(getImageUrl(p), '_blank')}>
+                              <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="qe evidence" onError={(e) => e.target.src="https://via.placeholder.com/100?text=Error"} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* SE INPUT SECTION */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex justify-between">
+                    <span>Status Remark</span>
+                    <span className="text-blue-500">{reworkRemark.length}/500</span>
+                  </label>
+                  <textarea 
+                    className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-[#004080] outline-none transition-all shadow-inner bg-gray-50/50" 
+                    rows="3" 
+                    placeholder="Explain what was fixed..." 
+                    value={reworkRemark} 
+                    onChange={(e) => setReworkRemark(e.target.value)} 
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Fix Evidence Photos</label>
+                    <label className="bg-[#004080] text-white w-10 h-10 rounded-full flex items-center justify-center cursor-pointer active:scale-90 transition-all shadow-lg hover:bg-blue-700">
+                      <FontAwesomeIcon icon={faCamera} />
+                      <input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {reworkPhotos.map((p, i) => (
+                      <div key={i} className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-xl group">
+                        <img src={p.url} className="w-full h-full object-cover" />
+                        <button onClick={() => setReworkPhotos(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-600/90 text-white w-7 h-7 rounded-xl flex items-center justify-center text-[10px] shadow-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <FontAwesomeIcon icon={faTimes} />
+                        </button>
+                      </div>
+                    ))}
+                    {reworkPhotos.length === 0 && (
+                      <div className="w-full py-10 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-gray-300">
+                        <FontAwesomeIcon icon={faImage} size="2x" className="mb-2 opacity-30" />
+                        <p className="text-[9px] font-black uppercase tracking-widest opacity-50">At least one photo required</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={submitRework} 
+                className="w-full py-5 bg-[#004080] text-white font-black rounded-2xl tracking-widest text-sm uppercase shadow-2xl shadow-blue-800/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all disabled:opacity-50 mt-4" 
+                disabled={loading || reworkPhotos.length === 0}
+              >
+                <FontAwesomeIcon icon={loading ? faClock : faCheckCircle} />
+                {loading ? 'Submitting...' : 'Submit'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -719,6 +853,105 @@ function SEIndex() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* TODAY TASKS LIST VIEW */}
+      {view === 'today-tasks' && (
+        <div className="p-4 animate-in slide-in-from-right duration-500 mb-20 text-left">
+           <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+            <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
+          </button>
+          
+          <h2 className="text-sm font-black text-[#004080] uppercase mb-6 tracking-widest pl-3 border-l-4 border-[#004080] flex items-center justify-between">
+            <span>Today's Submissions</span>
+            <span className="text-[10px] bg-blue-50 px-2 py-0.5 rounded-full">{todayReports.length}</span>
+          </h2>
+
+          <div className="space-y-4">
+             {todayReports.length > 0 ? todayReports.map((r, i) => (
+                <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-blue-100 transition-all group">
+                   <div className="flex justify-between items-start mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-[#004080] uppercase tracking-widest mb-1">{r.projectName}</span>
+                        <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${r.status === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                        {r.status}
+                      </div>
+                   </div>
+                   
+                   <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
+                          <FontAwesomeIcon icon={faClock} className="text-gray-400 text-xs" />
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-400">{r.submittedAt || "Just now"}</p>
+                      </div>
+                      <div className="text-[10px] font-black text-gray-400 italic">
+                        {r.items?.length || 0} Checkpoints
+                      </div>
+                   </div>
+                </div>
+             )) : (
+                <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                    <FontAwesomeIcon icon={faListAlt} size="3x" className="mb-4 opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No reports submitted today</p>
+                </div>
+             )}
+          </div>
+        </div>
+      )}
+
+      {/* PENDING APPROVAL LIST VIEW */}
+      {view === 'pending-approval' && (
+        <div className="p-4 animate-in slide-in-from-right duration-500 mb-20 text-left">
+           <button onClick={() => setView('dashboard')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+            <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
+          </button>
+          
+          <h2 className="text-sm font-black text-[#004080] uppercase mb-6 tracking-widest pl-3 border-l-4 border-orange-500 flex items-center justify-between">
+            <span>In Review by QE</span>
+            <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-black">{pendingReports.length}</span>
+          </h2>
+
+          <div className="space-y-4">
+             {pendingReports.length > 0 ? pendingReports.map((r, i) => (
+                <div key={i} className="bg-white border-2 border-gray-50 rounded-3xl p-5 shadow-sm hover:border-orange-100 transition-all group">
+                   <div className="flex justify-between items-start mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">{r.projectName}</span>
+                        <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                      </div>
+                      <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter bg-orange-50 text-orange-600 animate-pulse">
+                        In Review
+                      </div>
+                   </div>
+                   
+                   <p className="text-[10px] font-bold text-gray-500 mb-4">{r.location} | {r.unitType}</p>
+
+                   <div className="flex items-center justify-between mt-4 py-3 border-t border-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
+                          <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-400 text-xs" />
+                        </div>
+                        <div className="flex flex-col">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Sent On</p>
+                          <p className="text-[10px] font-black text-gray-700">{r.date} at {r.submittedAt?.split(',')[1] || r.submittedAt}</p>
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-black text-gray-400 italic">
+                        {r.items?.length || 0} Items
+                      </div>
+                   </div>
+                </div>
+             )) : (
+                <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                    <FontAwesomeIcon icon={faClock} size="3x" className="mb-4 opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No reports pending for approval</p>
+                </div>
+             )}
+          </div>
         </div>
       )}
 
