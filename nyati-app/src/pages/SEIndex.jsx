@@ -263,11 +263,11 @@ function SEIndex() {
     selectedCats.forEach(cat => {
       cat.items.forEach(item => {
         if (itemSelection[item._id]) {
-          reportData.items.push({ 
-            category: cat.name, 
-            question: item.questionText, 
-            status: 'Completed', 
-            submittedAt: reportData.submittedAt 
+          reportData.items.push({
+            category: cat.name,
+            question: item.questionText,
+            status: 'Completed',
+            submittedAt: reportData.submittedAt
           });
         }
       })
@@ -572,16 +572,16 @@ function SEIndex() {
                 </div>
                 <div className="p-4 space-y-4 bg-gray-50">
                   {cat.items.map((it, ii) => (
-                    <div 
-                      key={ii} 
+                    <div
+                      key={ii}
                       onClick={() => handleItemCheckboxChange(it._id)}
                       className={`p-4 rounded-xl border font-bold text-xs flex justify-between items-center cursor-pointer transition-all ${itemSelection[it._id] ? 'bg-green-50 border-green-200 text-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-100'}`}
                     >
                       <span className="flex-1">{it.questionText}</span>
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 accent-green-500 ml-3 shrink-0" 
-                        checked={itemSelection[it._id] || false} 
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 accent-green-500 ml-3 shrink-0"
+                        checked={itemSelection[it._id] || false}
                         readOnly
                       />
                     </div>
