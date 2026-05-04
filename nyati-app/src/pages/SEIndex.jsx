@@ -121,7 +121,7 @@ function SEIndex() {
   const [selectedRework, setSelectedRework] = useState(null);
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
-  const [categorySelection, setCategorySelection] = useState({});
+  const [itemSelection, setItemSelection] = useState({}); // Tracking individual item selection
   const [todayReports, setTodayReports] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
     todayTasks: 0,
@@ -241,7 +241,7 @@ function SEIndex() {
   }
 
   const handleInitialSubmit = () => {
-    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType || !spotData.locationUnit) return alert("Pehle building info bhariye!");
+    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) return alert("Pehle building info bhariye!");
     if (selectedCats.length === 0) return alert("Kam se kam ek category chuniye!");
     setView('checklist');
   }
@@ -262,8 +262,13 @@ function SEIndex() {
     }
     selectedCats.forEach(cat => {
       cat.items.forEach(item => {
-        if (categorySelection[cat.name]) {
-          reportData.items.push({ category: cat.name, question: item.questionText, status: 'Completed', submittedAt: reportData.submittedAt });
+        if (itemSelection[item._id]) {
+          reportData.items.push({ 
+            category: cat.name, 
+            question: item.questionText, 
+            status: 'Completed', 
+            submittedAt: reportData.submittedAt 
+          });
         }
       })
     })
@@ -275,7 +280,7 @@ function SEIndex() {
         alert('Checklist Sent to QE!');
         setView('dashboard');
         setSelectedCats([]);
-        setCategorySelection({});
+        setItemSelection({});
         setSpotData({ buildingArea: '', floorLevel: '', unitType: '', locationUnit: '' });
         fetchDashboardStats();
       }
@@ -382,8 +387,8 @@ function SEIndex() {
 
   const handleLogout = () => { localStorage.removeItem('nyati_user'); window.location.href = '/'; }
 
-  const handleHeaderCheckboxChange = (catName) => {
-    setCategorySelection(prev => ({ ...prev, [catName]: !prev[catName] }));
+  const handleItemCheckboxChange = (itemId) => {
+    setItemSelection(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
   const openReworkForm = (item, reportId, itemIdx) => {
@@ -562,8 +567,26 @@ function SEIndex() {
           <div className="space-y-6">
             {selectedCats.map((cat, ci) => (
               <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-[#004080] text-white p-4 flex justify-between items-center font-black text-[10px] uppercase"><span>{cat.name}</span><div className="flex items-center gap-2"><span>ALL</span><input type="checkbox" className="w-5 h-5 accent-green-500" checked={categorySelection[cat.name] || false} onChange={() => handleHeaderCheckboxChange(cat.name)} /></div></div>
-                <div className="p-4 space-y-4 bg-gray-50">{cat.items.map((it, ii) => (<div key={ii} className={`p-4 rounded-xl border font-bold text-xs ${categorySelection[cat.name] ? 'bg-green-50 border-green-200 text-gray-800' : 'bg-white text-gray-400'}`}>{it.questionText}</div>))}</div>
+                <div className="bg-[#004080] text-white p-4 font-black text-[10px] uppercase">
+                  <span>{cat.name}</span>
+                </div>
+                <div className="p-4 space-y-4 bg-gray-50">
+                  {cat.items.map((it, ii) => (
+                    <div 
+                      key={ii} 
+                      onClick={() => handleItemCheckboxChange(it._id)}
+                      className={`p-4 rounded-xl border font-bold text-xs flex justify-between items-center cursor-pointer transition-all ${itemSelection[it._id] ? 'bg-green-50 border-green-200 text-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-100'}`}
+                    >
+                      <span className="flex-1">{it.questionText}</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 accent-green-500 ml-3 shrink-0" 
+                        checked={itemSelection[it._id] || false} 
+                        readOnly
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
