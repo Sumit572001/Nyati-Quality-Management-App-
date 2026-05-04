@@ -2,7 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 
-const BASE_URL = 'http://192.168.12.93:5000'
+import BASE_URL from '../config'
 
 function Login() {
   const [username, setUsername] = useState('')
@@ -59,14 +59,13 @@ function Login() {
   return (
     <div className="min-h-screen bg-[#eef2f3] flex items-center justify-center px-4">
       <div className="bg-white p-10 rounded-2xl shadow-lg w-full max-w-sm text-center">
-        
+
         {/* Logo */}
         <div className="flex justify-center mb-2">
-          <img 
-            src="https://www.nyatigroup.com/Nyati-logo-seo.png" 
-            alt="Nyati Logo" 
+          <img
+            src="/logo.png"
+            alt="Nyati Logo"
             className="h-12 w-auto"
-            onError={(e) => { e.target.style.display = 'none' }}
           />
         </div>
 

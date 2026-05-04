@@ -8,7 +8,7 @@ import {
   faClock, faImage
 } from '@fortawesome/free-solid-svg-icons'
 
-const BASE_URL = 'http://192.168.12.93:5000'
+import BASE_URL from '../config'
 
 // --- HELPERS ---
 const sortFloors = (floors) => {
@@ -472,8 +472,7 @@ function SEIndex() {
           {reworkReports.length > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>}
         </button>
         <div className="flex flex-col items-center">
-          <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
-          <span className="text-[7px] font-black text-blue-400 uppercase tracking-widest mt-0.5">System Updated v2.1</span>
+          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
         </div>
         <div className="w-10"></div>
       </div>

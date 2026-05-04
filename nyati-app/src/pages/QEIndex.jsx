@@ -6,7 +6,7 @@ import {
   faBars, faTimes, faSignOutAlt, faUserCircle, faInfoCircle, faCamera, faCalendarAlt, faEdit, faUserTie, faTrash, faHistory, faHome, faArrowLeft, faImage, faExternalLinkAlt, faSearchPlus, faUserShield, faUserGear, faUpload, faExclamationTriangle, faChartLine, faListAlt
 } from '@fortawesome/free-solid-svg-icons'
 
-const BASE_URL = 'http://192.168.12.93:5000'
+import BASE_URL from '../config'
 
 function QEIndex() {
   const userStr = localStorage.getItem('nyati_user');
@@ -360,7 +360,7 @@ function QEIndex() {
             <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping border-2 border-white"></span>
           )}
         </button>
-        <img src="https://www.nyatigroup.com/Nyati-logo-seo.png" alt="Logo" className="h-8 w-auto" />
+        <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
         <div className="w-10"></div>
       </div>
 

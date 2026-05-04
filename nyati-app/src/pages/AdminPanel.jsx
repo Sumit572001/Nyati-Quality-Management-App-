@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlus, faTrash, faSignOutAlt, faList, faTags, faBuilding, faStairs, faHome } from '@fortawesome/free-solid-svg-icons'
 
-const BASE_URL = 'http://192.168.12.93:5000'
-// const BASE_URL = "http://localhost:5000";
+import BASE_URL from '../config'
 
 function AdminPanel() {
   // Tabs State
