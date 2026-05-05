@@ -129,6 +129,7 @@ function SEIndex() {
     compliance: 0,
     recentActivity: []
   });
+  const [passedItems, setPassedItems] = useState([]); // Questions already passed for this unit
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -240,10 +241,30 @@ function SEIndex() {
     setSelectedCats(prev => prev.find(c => c.name === cat.name) ? prev.filter(c => c.name !== cat.name) : [...prev, cat]);
   }
 
-  const handleInitialSubmit = () => {
+  const handleInitialSubmit = async () => {
     if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) return alert("Pehle building info bhariye!");
     if (selectedCats.length === 0) return alert("Kam se kam ek category chuniye!");
-    setView('checklist');
+
+    try {
+      setLoading(true);
+      const res = await axios.get(`${BASE_URL}/api/passed-items`, {
+        params: {
+          block: spotData.buildingArea,
+          floor: spotData.floorLevel,
+          unitType: spotData.unitType,
+          location: spotData.locationUnit
+        }
+      });
+      setPassedItems(Array.isArray(res.data) ? res.data : []);
+      setView('checklist');
+    } catch (err) {
+      console.error("Error fetching passed items", err);
+      // Fallback to showing all items if fetch fails
+      setPassedItems([]);
+      setView('checklist');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const submitFinalReport = async () => {
@@ -387,7 +408,8 @@ function SEIndex() {
 
   const handleLogout = () => { localStorage.removeItem('nyati_user'); window.location.href = '/'; }
 
-  const handleItemCheckboxChange = (itemId) => {
+  const handleItemCheckboxChange = (itemId, isPassed) => {
+    if (isPassed) return; // Prevent change for already passed items
     setItemSelection(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
@@ -571,21 +593,33 @@ function SEIndex() {
                   <span>{cat.name}</span>
                 </div>
                 <div className="p-4 space-y-4 bg-gray-50">
-                  {cat.items.map((it, ii) => (
-                    <div
-                      key={ii}
-                      onClick={() => handleItemCheckboxChange(it._id)}
-                      className={`p-4 rounded-xl border font-bold text-xs flex justify-between items-center cursor-pointer transition-all ${itemSelection[it._id] ? 'bg-green-50 border-green-200 text-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-100'}`}
-                    >
-                      <span className="flex-1">{it.questionText}</span>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 accent-green-500 ml-3 shrink-0"
-                        checked={itemSelection[it._id] || false}
-                        readOnly
-                      />
-                    </div>
-                  ))}
+                  {cat.items.map((it, ii) => {
+                    const itQuestionTextNormalized = (it.questionText || '').toString().trim();
+                    const isPassed = passedItems.some(p => p.toString().trim() === itQuestionTextNormalized);
+                    return (
+                      <div
+                        key={ii}
+                        onClick={() => handleItemCheckboxChange(it._id, isPassed)}
+                        className={`p-4 rounded-xl border font-bold text-xs flex justify-between items-center transition-all ${isPassed
+                          ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-70'
+                          : itemSelection[it._id]
+                            ? 'bg-green-50 border-green-200 text-gray-800 shadow-sm cursor-pointer'
+                            : 'bg-white text-gray-500 border-gray-100 cursor-pointer'
+                          }`}
+                      >
+                        <span className={`flex-1 ${isPassed ? 'line-through decoration-gray-400 decoration-2' : ''}`}>
+                          {it.questionText}
+                          {isPassed && <span className="ml-2 text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded uppercase font-black no-underline inline-block">Passed</span>}
+                        </span>
+                        <input
+                          type="checkbox"
+                          className={`w-5 h-5 ${isPassed ? 'accent-gray-400 opacity-50' : 'accent-green-500'} ml-3 shrink-0`}
+                          checked={isPassed || itemSelection[it._id] || false}
+                          readOnly
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -730,25 +764,21 @@ function SEIndex() {
           </div>
 
           <div className="space-y-4">
-            {(() => {
-              const fullyApproved = historyReports.filter(report =>
-                report.items.every(item => item.qeDecision === 'pass')
-              );
-
-              if (fullyApproved.length === 0) {
-                return (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
-                    <FontAwesomeIcon icon={faHistory} size="3x" className="mb-4" />
-                    <p className="text-xs font-bold uppercase tracking-widest text-center">Abhi koi fully clear history nahi hai</p>
-                  </div>
-                );
-              }
-
-              return fullyApproved.map((report, idx) => {
+            {historyReports.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-300 opacity-60">
+                <FontAwesomeIcon icon={faHistory} size="3x" className="mb-4" />
+                <p className="text-xs font-bold uppercase tracking-widest text-center">Abhi koi history nahi hai</p>
+              </div>
+            ) : (
+              historyReports.map((report, idx) => {
                 const isExpanded = expandedHistory[idx] || false;
+                const passCount = report.items.filter(i => i.qeDecision === 'pass').length;
+                const totalCount = report.items.length;
+                const isFullyApproved = passCount === totalCount;
+
                 return (
-                  <div key={idx} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 border-t-green-500 transition-all duration-300">
-                    <div className="bg-green-50/30 p-3 flex justify-between items-start cursor-pointer hover:bg-green-50/50 transition-colors" onClick={() => toggleHistoryItem(idx)}>
+                  <div key={idx} className={`bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 ${isFullyApproved ? 'border-t-green-500' : 'border-t-orange-500'} transition-all duration-300`}>
+                    <div className="bg-gray-50/30 p-3 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={() => toggleHistoryItem(idx)}>
                       <div className="flex flex-col flex-1">
                         <span className="text-[10px] font-black text-[#004080] uppercase tracking-tight">{report.block} | {report.floor}</span>
                         <span className="text-[9px] text-gray-400 font-bold">{report.unitType} | {report.location}</span>
@@ -756,8 +786,8 @@ function SEIndex() {
                       <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
                         <span className="text-[9px] text-gray-400 font-bold">{report.date}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-black uppercase text-green-600 flex items-center gap-1">
-                            100% CLEAR <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />
+                          <span className={`text-[9px] font-black uppercase ${isFullyApproved ? 'text-green-600' : 'text-orange-500'} flex items-center gap-1`}>
+                            {isFullyApproved ? '100% CLEAR' : `${passCount}/${totalCount} PASSED`} {isFullyApproved && <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />}
                           </span>
                           <div className={`w-6 h-6 rounded-full bg-white border border-gray-100 flex items-center justify-center text-[#004080] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
                             <FontAwesomeIcon icon={faChevronDown} className="text-[10px]" />
@@ -775,8 +805,8 @@ function SEIndex() {
                                 <p className="text-gray-800 leading-tight">{item.question}</p>
                                 <p className="text-[9px] text-gray-400 mt-1 uppercase opacity-60">{item.category}</p>
                               </div>
-                              <div className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-[8px] font-black">
-                                PASS
+                              <div className={`px-2 py-1 ${item.qeDecision === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-md text-[8px] font-black`}>
+                                {item.qeDecision === 'pass' ? 'PASS' : item.qeDecision === 'fail' ? 'FAIL' : 'PENDING'}
                               </div>
                             </div>
                           ))}
@@ -793,8 +823,8 @@ function SEIndex() {
                     )}
                   </div>
                 );
-              });
-            })()}
+              })
+            )}
           </div>
         </div>
       )}
