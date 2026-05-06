@@ -83,6 +83,7 @@ function QEIndex() {
         pendingReview: olderCount,
         todayChecklist: todayCount,
         waitingRework: returned.length,
+        approvalCount: reworks.length,
         projectHealth: {
           approved: 85,
           pending: 10,
@@ -395,18 +396,15 @@ function QEIndex() {
             </div>
           </div>
 
-          {/* REWORKS CARD */}
-          <div onClick={() => { setView('reworks'); setReworkFilter('waiting'); }} className="bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-orange-200 transition-all cursor-pointer group mb-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-5">
-                <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
-                  <FontAwesomeIcon icon={faHistory} size="xl" />
-                </div>
-                <div>
-                  <p className="text-xl font-black text-gray-900 leading-none">{returnedReports.length}</p>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Waiting for Decision (Reworks)</p>
-                </div>
-              </div>
+          {/* REWORKS SECTION */}
+          <div onClick={() => { setView('reworks'); setReworkFilter('waiting'); }} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-6 border-b-4 border-b-violet-500 cursor-pointer active:scale-95 transition-transform group">
+            <div className="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-500 group-hover:scale-110 transition-transform shrink-0">
+              <FontAwesomeIcon icon={faHistory} size="xl" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-gray-900 leading-none">{returnedReports.length}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Waiting for Decision (Reworks)</p>
+              <p className="text-[9px] font-bold text-violet-400 uppercase mt-1">Pending with Site Engineer</p>
             </div>
           </div>
 
@@ -429,37 +427,54 @@ function QEIndex() {
                   <h3 className="font-bold text-xs uppercase tracking-wider">CHECKLIST REVIEW:</h3>
                   <FontAwesomeIcon icon={faTimesCircle} className="cursor-pointer" onClick={() => setSelectedReport(null)} />
                 </div>
-                <div className="border border-gray-200 border-t-0 rounded-b-lg bg-white mb-6 shadow-lg overflow-hidden">
-                  {selectedReport.items.map((item, idx) => (
-                    <div key={idx} className="border-b border-gray-100 last:border-0 p-3 bg-white">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <p className="text-[12px] font-bold text-gray-800 leading-tight">{idx + 1}. {item.question}</p>
-                          {item.photos && item.photos.length > 0 && (
-                            <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
-                              {item.photos.map((img, i) => (
-                                <img
-                                  key={i}
-                                  src={getImageUrl(img)}
-                                  className="w-12 h-12 object-cover rounded-md border shadow-sm cursor-pointer"
-                                  onClick={() => window.open(getImageUrl(img), '_blank')}
-                                  alt="report"
-                                  onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => handleDecision(idx, 'Approve')} className={`px-4 py-2 rounded-md border font-black text-[10px] tracking-wider transition-all min-w-[65px] ${item.qeDecision === 'Approve' ? 'bg-green-600 border-green-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400'}`}>PASS</button>
-                          <button onClick={() => handleDecision(idx, 'Reject')} className={`px-4 py-2 rounded-md border font-black text-[10px] tracking-wider transition-all min-w-[65px] ${item.qeDecision === 'Reject' ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400'}`}>REJECT</button>
-                        </div>
+                <div className="space-y-4 mb-6">
+                  {Object.entries(
+                    selectedReport.items.reduce((acc, item, idx) => {
+                      const cat = item.category || 'General';
+                      if (!acc[cat]) acc[cat] = [];
+                      acc[cat].push({ ...item, originalIdx: idx });
+                      return acc;
+                    }, {})
+                  ).map(([category, items], catIdx) => (
+                    <div key={catIdx} className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden">
+                      <div className="bg-[#004080] px-4 py-2 flex justify-between items-center">
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">{category}</span>
+                        <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded-full text-white font-bold">{items.length} Points</span>
                       </div>
-                      {item.qeDecision === 'Reject' && item.rejectDetails?.observation && (
-                        <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
-                          <p className="text-[10px] font-bold text-red-600">Observation: {item.rejectDetails.observation}</p>
-                        </div>
-                      )}
+                      <div className="divide-y divide-gray-100">
+                        {items.map((item, i) => (
+                          <div key={i} className="p-3 bg-white">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <p className="text-[12px] font-bold text-gray-800 leading-tight">{item.originalIdx + 1}. {item.question}</p>
+                                {item.photos && item.photos.length > 0 && (
+                                  <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
+                                    {item.photos.map((img, photoIdx) => (
+                                      <img
+                                        key={photoIdx}
+                                        src={getImageUrl(img)}
+                                        className="w-12 h-12 object-cover rounded-md border shadow-sm cursor-pointer"
+                                        onClick={() => window.open(getImageUrl(img), '_blank')}
+                                        alt="report"
+                                        onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => handleDecision(item.originalIdx, 'Approve')} className={`px-4 py-2 rounded-md border font-black text-[10px] tracking-wider transition-all min-w-[65px] ${item.qeDecision === 'Approve' ? 'bg-green-600 border-green-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400'}`}>PASS</button>
+                                <button onClick={() => handleDecision(item.originalIdx, 'Reject')} className={`px-4 py-2 rounded-md border font-black text-[10px] tracking-wider transition-all min-w-[65px] ${item.qeDecision === 'Reject' ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400'}`}>REJECT</button>
+                              </div>
+                            </div>
+                            {item.qeDecision === 'Reject' && item.rejectDetails?.observation && (
+                              <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
+                                <p className="text-[10px] font-bold text-red-600">Observation: {item.rejectDetails.observation}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -484,11 +499,13 @@ function QEIndex() {
                   }).map((report, idx) => (
                     <div key={idx} onClick={() => setSelectedReport(report)} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer group">
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold bg-blue-50 text-[#004080] px-2 py-0.5 rounded uppercase">{report.block} | {report.floor}</span>
-                        <span className="text-[10px] text-gray-400">{report.date}</span>
+                        <span className="text-[10px] font-bold bg-blue-50 text-[#004080] px-2 py-0.5 rounded uppercase">
+                          {[report.block, report.floor, report.unitType].filter(Boolean).join(' | ')}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-bold">{report.submittedAt || report.date}</span>
                       </div>
                       <p className="text-xs font-black text-gray-800 group-hover:text-[#004080] transition-colors">{report.projectName}</p>
-                      <p className="text-[10px] text-gray-500 mt-1 font-bold italic">{report.location} | {report.unitType || 'N/A'}</p>
+                      <p className="text-[10px] text-gray-500 mt-1 font-bold italic">Location: {report.location || 'N/A'}</p>
                       <div className="mt-3 flex items-center justify-end">
                         <button className="text-[9px] font-black text-[#004080] uppercase flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">Open Checklist <FontAwesomeIcon icon={faExternalLinkAlt} /></button>
                       </div>
@@ -519,9 +536,9 @@ function QEIndex() {
                 <div key={idx} onClick={() => { setSelectedRework(report); setView('rework-detail'); }} className={`bg-white border rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer ${reworkFilter === 'waiting' ? 'border-l-4 border-l-orange-400' : 'border-gray-200'}`}>
                   <div className="flex justify-between items-start mb-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${reworkFilter === 'approval' ? 'bg-blue-100 text-[#004080]' : 'bg-orange-50 text-orange-600'}`}>
-                      {report.block} | {report.floor}
+                      {[report.block, report.floor, report.unitType].filter(Boolean).join(' | ')}
                     </span>
-                    <span className="text-[10px] text-gray-400">{report.date}</span>
+                    <span className="text-[10px] text-gray-400 font-bold">{report.submittedAt || report.date}</span>
                   </div>
                   <p className="text-xs font-bold text-gray-800">{report.projectName}</p>
                   <p className="text-[10px] text-gray-500 mt-1">
@@ -554,7 +571,7 @@ function QEIndex() {
 
           <div className="bg-[#004080] text-white p-4 rounded-xl mb-6 shadow-lg">
             <h3 className="text-xs font-bold uppercase mb-1">Rework Verification</h3>
-            <p className="text-lg font-bold">{selectedRework?.block} - {selectedRework?.floor}</p>
+            <p className="text-lg font-bold">{[selectedRework?.block, selectedRework?.floor, selectedRework?.unitType].filter(Boolean).join(' - ')}</p>
             <p className="text-[11px] opacity-80">{selectedRework?.unitType} | {selectedRework?.location} | {selectedRework?.projectName}</p>
           </div>
 

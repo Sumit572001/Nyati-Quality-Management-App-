@@ -129,7 +129,7 @@ function SEIndex() {
     compliance: 0,
     recentActivity: []
   });
-  const [passedItems, setPassedItems] = useState([]); // Questions already passed for this unit
+  const [passedQuestions, setPassedQuestions] = useState([]); // Questions already passed for this unit
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -168,7 +168,7 @@ function SEIndex() {
       setTodayReports(todaySubmissions);
 
       // Filter for Pending reports (QE hasn't acted yet)
-      const pending = allReports.filter(r => r.status && r.status.toLowerCase() === 'pending');
+      const pending = allReports.filter(r => r.status && (r.status.toLowerCase() === 'pending' || r.status === 'Rework Submitted'));
       setPendingReports(pending);
 
       // Fetch Reworks
@@ -247,20 +247,20 @@ function SEIndex() {
 
     try {
       setLoading(true);
-      const res = await axios.get(`${BASE_URL}/api/passed-items`, {
+      const res = await axios.get(`${BASE_URL}/api/passed-checkpoints`, {
         params: {
           block: spotData.buildingArea,
           floor: spotData.floorLevel,
           unitType: spotData.unitType,
-          location: spotData.locationUnit
+          location: spotData.locationUnit,
+          user: currentUser
         }
       });
-      setPassedItems(Array.isArray(res.data) ? res.data : []);
+      setPassedQuestions(res.data.passedQuestions || []);
       setView('checklist');
     } catch (err) {
-      console.error("Error fetching passed items", err);
-      // Fallback to showing all items if fetch fails
-      setPassedItems([]);
+      console.error("Error fetching passed checkpoints", err);
+      setPassedQuestions([]);
       setView('checklist');
     } finally {
       setLoading(false);
@@ -546,8 +546,10 @@ function SEIndex() {
                       <FontAwesomeIcon icon={isPass ? faCheckCircle : faExclamationTriangle} className="text-sm" />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <p className="text-[10px] font-black text-gray-800 truncate leading-tight uppercase">{r.block} | {r.floor}</p>
-                      <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.date} • {r.unitType || 'Unit'}</p>
+                      <p className="text-[10px] font-black text-gray-800 truncate leading-tight uppercase">
+                        {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
+                      </p>
+                      <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.submittedAt || r.date} • {r.location || 'N/A'}</p>
                     </div>
                     <div className={`text-[10px] font-black uppercase tracking-widest ${isPass ? 'text-green-500' : 'text-red-500'}`}>
                       {isPass ? 'PASS' : 'FAIL'}
@@ -594,29 +596,37 @@ function SEIndex() {
                 </div>
                 <div className="p-4 space-y-4 bg-gray-50">
                   {cat.items.map((it, ii) => {
-                    const itQuestionTextNormalized = (it.questionText || '').toString().trim();
-                    const isPassed = passedItems.some(p => p.toString().trim() === itQuestionTextNormalized);
+                    const isPassed = passedQuestions.includes(it.questionText);
                     return (
-                      <div
-                        key={ii}
-                        onClick={() => handleItemCheckboxChange(it._id, isPassed)}
-                        className={`p-4 rounded-xl border font-bold text-xs flex justify-between items-center transition-all ${isPassed
-                          ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-70'
-                          : itemSelection[it._id]
-                            ? 'bg-green-50 border-green-200 text-gray-800 shadow-sm cursor-pointer'
-                            : 'bg-white text-gray-500 border-gray-100 cursor-pointer'
-                          }`}
-                      >
-                        <span className={`flex-1 ${isPassed ? 'line-through decoration-gray-400 decoration-2' : ''}`}>
-                          {it.questionText}
-                          {isPassed && <span className="ml-2 text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded uppercase font-black no-underline inline-block">Passed</span>}
-                        </span>
-                        <input
-                          type="checkbox"
-                          className={`w-5 h-5 ${isPassed ? 'accent-gray-400 opacity-50' : 'accent-green-500'} ml-3 shrink-0`}
-                          checked={isPassed || itemSelection[it._id] || false}
-                          readOnly
-                        />
+                      <div key={ii}>
+                        {isPassed ? (
+                          // INACTIVE - already passed
+                          <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-500 text-sm">✅</span>
+                              <label className="text-[11px] text-gray-400 line-through leading-tight block">
+                                {it.questionText}
+                              </label>
+                            </div>
+                            <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
+                          </div>
+                        ) : (
+                          // ACTIVE - normal interactive
+                          <div
+                            onClick={() => handleItemCheckboxChange(it._id, false)}
+                            className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center cursor-pointer ${itemSelection[it._id] ? 'bg-green-50 border-green-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
+                          >
+                            <label className="text-[11px] font-bold text-gray-700 leading-tight block flex-1">
+                              {it.questionText}
+                            </label>
+                            <input
+                              type="checkbox"
+                              className="w-5 h-5 accent-green-500 ml-3 shrink-0"
+                              checked={itemSelection[it._id] || false}
+                              readOnly
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -780,11 +790,13 @@ function SEIndex() {
                   <div key={idx} className={`bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden border-t-4 ${isFullyApproved ? 'border-t-green-500' : 'border-t-orange-500'} transition-all duration-300`}>
                     <div className="bg-gray-50/30 p-3 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={() => toggleHistoryItem(idx)}>
                       <div className="flex flex-col flex-1">
-                        <span className="text-[10px] font-black text-[#004080] uppercase tracking-tight">{report.block} | {report.floor}</span>
-                        <span className="text-[9px] text-gray-400 font-bold">{report.unitType} | {report.location}</span>
+                        <span className="text-[10px] font-black text-[#004080] uppercase tracking-tight">
+                          {[report.block, report.floor, report.unitType].filter(Boolean).join(' | ')}
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-bold">Location: {report.location || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                        <span className="text-[9px] text-gray-400 font-bold">{report.date}</span>
+                        <span className="text-[9px] text-gray-400 font-bold">{report.submittedAt || report.date}</span>
                         <div className="flex items-center gap-2">
                           <span className={`text-[9px] font-black uppercase ${isFullyApproved ? 'text-green-600' : 'text-orange-500'} flex items-center gap-1`}>
                             {isFullyApproved ? '100% CLEAR' : `${passCount}/${totalCount} PASSED`} {isFullyApproved && <FontAwesomeIcon icon={faCheckCircle} className="text-[10px]" />}
@@ -798,16 +810,29 @@ function SEIndex() {
 
                     {isExpanded && (
                       <div className="animate-in slide-in-from-top duration-300">
-                        <div className="p-3 space-y-2 border-t border-gray-50 bg-white">
-                          {report.items.map((item, iIdx) => (
-                            <div key={iIdx} className="flex items-center justify-between gap-3 text-[11px] font-bold p-3 bg-gray-50/50 rounded-xl border border-gray-100/50">
-                              <div className="flex-1">
-                                <p className="text-gray-800 leading-tight">{item.question}</p>
-                                <p className="text-[9px] text-gray-400 mt-1 uppercase opacity-60">{item.category}</p>
-                              </div>
-                              <div className={`px-2 py-1 ${item.qeDecision === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-md text-[8px] font-black`}>
-                                {item.qeDecision === 'pass' ? 'PASS' : item.qeDecision === 'fail' ? 'FAIL' : 'PENDING'}
-                              </div>
+                        <div className="p-3 space-y-4 border-t border-gray-50 bg-white">
+                          {Object.entries(
+                            report.items
+                              .filter(item => item.qeDecision === 'pass')
+                              .reduce((acc, item) => {
+                                const cat = item.category || 'General';
+                                if (!acc[cat]) acc[cat] = [];
+                                acc[cat].push(item);
+                                return acc;
+                              }, {})
+                          ).map(([category, items], catIdx) => (
+                            <div key={catIdx} className="space-y-2 mb-4 last:mb-0">
+                              <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">{category}</div>
+                              {items.map((item, iIdx) => (
+                                <div key={iIdx} className="flex items-center justify-between gap-3 text-[11px] font-bold p-3 bg-gray-50/50 rounded-xl border border-gray-100/50">
+                                  <div className="flex-1">
+                                    <p className="text-gray-800 leading-tight">{item.question}</p>
+                                  </div>
+                                  <div className={`px-2 py-1 ${item.qeDecision === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-md text-[8px] font-black`}>
+                                    {item.qeDecision === 'pass' ? 'PASS' : item.qeDecision === 'fail' ? 'FAIL' : 'PENDING'}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -926,7 +951,9 @@ function SEIndex() {
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex flex-col">
                     <span className="text-[9px] font-black text-[#004080] uppercase tracking-widest mb-1">{r.projectName}</span>
-                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">
+                      {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
+                    </h3>
                   </div>
                   <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${r.status === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
                     {r.status}
@@ -973,7 +1000,9 @@ function SEIndex() {
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex flex-col">
                     <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">{r.projectName}</span>
-                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">{r.block} | {r.floor}</h3>
+                    <h3 className="text-sm font-black text-gray-800 leading-tight uppercase group-hover:text-[#004080] transition-colors">
+                      {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
+                    </h3>
                   </div>
                   <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter bg-orange-50 text-orange-600 animate-pulse">
                     In Review
@@ -990,6 +1019,7 @@ function SEIndex() {
                     <div className="flex flex-col">
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Sent On</p>
                       <p className="text-[10px] font-black text-gray-700">{r.date} at {r.submittedAt?.split(',')[1] || r.submittedAt}</p>
+                      <p className="text-[9px] font-bold text-[#004080] mt-1 uppercase">{r.unitType}</p>
                     </div>
                   </div>
                   <div className="text-[10px] font-black text-gray-400 italic">
