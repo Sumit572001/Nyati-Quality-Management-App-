@@ -130,6 +130,7 @@ function SEIndex() {
     recentActivity: []
   });
   const [passedQuestions, setPassedQuestions] = useState([]); // Questions already passed for this unit
+  const [rejectedQuestions, setRejectedQuestions] = useState([]); // Questions rejected and needing rework
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -257,10 +258,12 @@ function SEIndex() {
         }
       });
       setPassedQuestions(res.data.passedQuestions || []);
+      setRejectedQuestions(res.data.rejectedQuestions || []);
       setView('checklist');
     } catch (err) {
       console.error("Error fetching passed checkpoints", err);
       setPassedQuestions([]);
+      setRejectedQuestions([]);
       setView('checklist');
     } finally {
       setLoading(false);
@@ -596,11 +599,13 @@ function SEIndex() {
                 </div>
                 <div className="p-4 space-y-4 bg-gray-50">
                   {cat.items.map((it, ii) => {
-                    const isPassed = passedQuestions.includes(it.questionText);
+                    const cleanQ = (it.questionText || '').toString().trim().toLowerCase();
+                    const isPassed = Array.isArray(passedQuestions) && passedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ);
+                    const isRejected = Array.isArray(rejectedQuestions) && rejectedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed;
                     return (
                       <div key={ii}>
                         {isPassed ? (
-                          // INACTIVE - already passed
+                          // PASSED - green inactive
                           <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
                             <div className="flex items-center gap-2">
                               <span className="text-green-500 text-sm">✅</span>
@@ -609,6 +614,17 @@ function SEIndex() {
                               </label>
                             </div>
                             <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
+                          </div>
+                        ) : isRejected ? (
+                          // REJECTED - red inactive
+                          <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
+                            <div className="flex items-center gap-2">
+                              <span className="text-red-500 text-sm">❌</span>
+                              <label className="text-[11px] text-red-400 line-through leading-tight block">
+                                {it.questionText}
+                              </label>
+                            </div>
+                            <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
                           </div>
                         ) : (
                           // ACTIVE - normal interactive
