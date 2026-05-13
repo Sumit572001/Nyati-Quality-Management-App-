@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import SEIndex from './pages/SEIndex'
 import QEIndex from './pages/QEIndex'
+import HODDashboard from './pages/HODDashboard'
 // ✅ AdminPanel import ho raha hai aapke pages folder se
 import AdminPanel from './pages/AdminPanel'
 
@@ -50,7 +51,11 @@ function App() {
             <AdminPanel />
           </ProtectedRoute>
         } />
-
+        <Route path="/hod" element={
+          <ProtectedRoute allowedRole="HOD">
+            <HODDashboard />
+          </ProtectedRoute>
+        } />
         {/* 5. Catch-all: Agar koi galat link ho toh Login pe wapas */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

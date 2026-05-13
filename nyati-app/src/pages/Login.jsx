@@ -72,28 +72,41 @@ function Login() {
         <h1 className="text-lg font-black text-[#004080] mt-4 uppercase tracking-normal">NECPL Quality Application</h1>
         <hr className="mt-4 mb-6 border-gray-100" />
 
-        <h2 className="text-base font-semibold text-gray-700 mb-6">User Login</h2>
+        <h2 className="text-base font-semibold mb-6" style={{ color: '#222' }}>
+          User Login
+        </h2>
 
         <div className="text-left mb-3">
-          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Username</label>
+          <label
+            className="text-[10px] font-bold uppercase ml-1"
+            style={{ color: '#444', display: 'block' }}
+          >
+            Username
+          </label>
           <input
             type="text"
             placeholder="Enter username"
             value={username}
             onChange={e => setUsername(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg mt-1 text-sm focus:outline-none focus:border-[#004080] bg-gray-50"
+            style={{ color: 'black', backgroundColor: '#f9f9f9' }} // Inline style add kiya
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg mt-1 text-sm focus:outline-none focus:border-[#004080]"
           />
         </div>
 
         <div className="text-left mb-6">
-          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Password</label>
+          <label
+            className="text-[10px] font-bold uppercase ml-1"
+            style={{ color: '#444', display: 'block' }}
+          >
+            Password
+          </label>
           <input
             type="password"
             placeholder="Enter password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && checkLogin()}
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg mt-1 text-sm focus:outline-none focus:border-[#004080] bg-gray-50"
+            className="w-full px-4 py-3 border border-gray-200 rounded-lg mt-1 text-sm text-gray-800 focus:outline-none focus:border-[#004080] bg-gray-50"
           />
         </div>
 
