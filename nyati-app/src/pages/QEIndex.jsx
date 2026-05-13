@@ -446,17 +446,7 @@ function QEIndex() {
                           <div key={i} className="p-3 bg-white">
                             <div className="flex items-center justify-between gap-4">
                               <div className="flex-1">
-                                <div className="flex items-start gap-2 flex-wrap">
-                                  <p className="text-[12px] font-bold text-gray-800 leading-tight">{item.originalIdx + 1}. {item.question}</p>
-                                  {item.seDecision ? (
-                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ${item.seDecision === 'yes' ? 'bg-green-100 text-green-700 border border-green-200' :
-                                      item.seDecision === 'no' ? 'bg-red-100 text-red-700 border border-red-200' :
-                                        'bg-orange-100 text-orange-700 border border-orange-200'
-                                      }`}>
-                                      {item.seDecision === 'yes' ? 'Yes' : item.seDecision === 'no' ? 'No' : 'N/A'}
-                                    </span>
-                                  ) : null}
-                                </div>
+                                <p className="text-[12px] font-bold text-gray-800 leading-tight">{item.originalIdx + 1}. {item.question}</p>
                                 {item.photos && item.photos.length > 0 && (
                                   <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
                                     {item.photos.map((img, photoIdx) => (

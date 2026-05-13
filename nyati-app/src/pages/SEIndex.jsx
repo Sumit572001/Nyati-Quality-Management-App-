@@ -98,90 +98,6 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
   );
 }
 
-function StatusSelector({ itemId, value, onChange, isPassed }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState('bottom');
-  const containerRef = useRef(null);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Smart positioning - check if dropdown will go below viewport
-  useEffect(() => {
-    if (isOpen && containerRef.current && dropdownRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const dropdownHeight = dropdownRef.current.offsetHeight;
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - containerRect.bottom;
-
-      if (spaceBelow < dropdownHeight + 20 && containerRect.top > dropdownHeight + 20) {
-        setPosition('top');
-      } else {
-        setPosition('bottom');
-      }
-    }
-  }, [isOpen]);
-
-  const getDisplay = () => {
-    if (value === 'yes') return <span className="text-green-600 text-sm font-bold">✓</span>;
-    if (value === 'no') return <span className="text-red-500 text-sm font-bold">✕</span>;
-    if (value === 'na') return <span className="text-orange-500 text-sm font-bold">−</span>;
-    return null;
-  };
-
-  const getOptionCard = (opt, label, icon, iconColor, bgColor, borderColor) => {
-    const isSelected = value === opt;
-    return (
-      <div
-        onClick={() => { onChange(itemId, opt); setIsOpen(false); }}
-        className={`cursor-pointer rounded-lg border p-2 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 min-w-[56px] ${isSelected
-          ? `${bgColor} ${borderColor} shadow-sm scale-105`
-          : 'bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200'
-          }`}
-      >
-        <span className={`${iconColor} text-sm font-bold`}>{icon}</span>
-        <span className={`text-[9px] font-black uppercase tracking-wide ${isSelected ? 'text-gray-800' : 'text-gray-500'}`}>{label}</span>
-      </div>
-    );
-  };
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <div
-        onClick={() => !isPassed && setIsOpen(!isOpen)}
-        className={`w-9 h-9 rounded-lg border flex items-center justify-center cursor-pointer transition-all duration-200 ${isPassed ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50' :
-          value === 'yes' ? 'bg-green-50 border-green-400' :
-            value === 'no' ? 'bg-red-50 border-red-400' :
-              value === 'na' ? 'bg-orange-50 border-orange-400' :
-                'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-      >
-        {getDisplay()}
-      </div>
-
-      {isOpen && (
-        <div
-          ref={dropdownRef}
-          className={`absolute right-0 z-50 w-auto bg-white border border-gray-200 rounded-xl shadow-2xl p-2 animate-in fade-in zoom-in duration-150 ${position === 'top' ? 'bottom-11 slide-in-from-bottom-2' : 'top-11 slide-in-from-top-2'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            {getOptionCard('yes', 'Yes', '✓', 'text-green-600', 'bg-green-50', 'border-green-300')}
-            {getOptionCard('no', 'No', '✕', 'text-red-500', 'bg-red-50', 'border-red-300')}
-            {getOptionCard('na', 'N/A', '−', 'text-orange-500', 'bg-orange-50', 'border-orange-300')}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SEIndex() {
   const user = JSON.parse(localStorage.getItem('nyati_user') || '{}')
   const currentUser = user.fullName || 'SE User'
@@ -205,7 +121,7 @@ function SEIndex() {
   const [selectedRework, setSelectedRework] = useState(null);
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
-  const [itemSelection, setItemSelection] = useState({}); // Tracking individual item selection: 'yes', 'no', 'na' or undefined
+  const [itemSelection, setItemSelection] = useState({}); // Tracking individual item selection
   const [todayReports, setTodayReports] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
     todayTasks: 0,
@@ -370,13 +286,11 @@ function SEIndex() {
     }
     selectedCats.forEach(cat => {
       cat.items.forEach(item => {
-        const selection = itemSelection[item._id];
-        if (selection) {
+        if (itemSelection[item._id]) {
           reportData.items.push({
             category: cat.name,
             question: item.questionText,
-            status: selection === 'yes' ? 'Completed' : selection === 'no' ? 'Rejected' : 'N/A',
-            seDecision: selection,
+            status: 'Completed',
             submittedAt: reportData.submittedAt
           });
         }
@@ -497,16 +411,9 @@ function SEIndex() {
 
   const handleLogout = () => { localStorage.removeItem('nyati_user'); window.location.href = '/'; }
 
-  const handleItemCheckboxChange = (itemId, value) => {
-    if (value === undefined) {
-      setItemSelection(prev => {
-        const updated = { ...prev };
-        delete updated[itemId];
-        return updated;
-      });
-    } else {
-      setItemSelection(prev => ({ ...prev, [itemId]: value }));
-    }
+  const handleItemCheckboxChange = (itemId, isPassed) => {
+    if (isPassed) return; // Prevent change for already passed items
+    setItemSelection(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
   const openReworkForm = (item, reportId, itemIdx) => {
@@ -722,16 +629,17 @@ function SEIndex() {
                         ) : (
                           // ACTIVE - normal interactive
                           <div
-                            className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
+                            onClick={() => handleItemCheckboxChange(it._id, false)}
+                            className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center cursor-pointer ${itemSelection[it._id] ? 'bg-green-50 border-green-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
                           >
-                            <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
+                            <label className="text-[11px] font-bold text-gray-700 leading-tight block flex-1">
                               {it.questionText}
                             </label>
-                            <StatusSelector
-                              itemId={it._id}
-                              value={itemSelection[it._id]}
-                              onChange={(id, val) => handleItemCheckboxChange(id, val)}
-                              isPassed={false}
+                            <input
+                              type="checkbox"
+                              className="w-5 h-5 accent-green-500 ml-3 shrink-0"
+                              checked={itemSelection[it._id] || false}
+                              readOnly
                             />
                           </div>
                         )}
