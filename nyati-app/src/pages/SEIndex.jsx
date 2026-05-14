@@ -141,8 +141,8 @@ function StatusSelector({ itemId, value, onChange, isPassed }) {
       <div
         onClick={() => { onChange(itemId, opt); setIsOpen(false); }}
         className={`cursor-pointer rounded-lg border p-2 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 min-w-[56px] ${isSelected
-            ? `${bgColor} ${borderColor} shadow-sm scale-105`
-            : 'bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+          ? `${bgColor} ${borderColor} shadow-sm scale-105`
+          : 'bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200'
           }`}
       >
         <span className={`${iconColor} text-sm font-bold`}>{icon}</span>
@@ -156,10 +156,10 @@ function StatusSelector({ itemId, value, onChange, isPassed }) {
       <div
         onClick={() => !isPassed && setIsOpen(!isOpen)}
         className={`w-9 h-9 rounded-lg border flex items-center justify-center cursor-pointer transition-all duration-200 ${isPassed ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50' :
-            value === 'yes' ? 'bg-green-50 border-green-400' :
-              value === 'no' ? 'bg-red-50 border-red-400' :
-                value === 'na' ? 'bg-orange-50 border-orange-400' :
-                  'bg-white border-gray-200 hover:border-gray-300'
+          value === 'yes' ? 'bg-green-50 border-green-400' :
+            value === 'no' ? 'bg-red-50 border-red-400' :
+              value === 'na' ? 'bg-orange-50 border-orange-400' :
+                'bg-white border-gray-200 hover:border-gray-300'
           }`}
       >
         {getDisplay()}
@@ -634,7 +634,13 @@ function SEIndex() {
           <div className="mb-20">
             <div className="flex justify-between mb-4"><h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
             <div className="space-y-3">
-              {dashboardStats.recentActivity.length > 0 ? dashboardStats.recentActivity.map((r, i) => {
+              {dashboardStats.recentActivity.filter(r => {
+                const s = (r.status || '').toString().toLowerCase();
+                return s === 'approved' || s === 'returned';
+              }).length > 0 ? dashboardStats.recentActivity.filter(r => {
+                const s = (r.status || '').toString().toLowerCase();
+                return s === 'approved' || s === 'returned';
+              }).map((r, i) => {
                 const isPass = r.status === 'Approved';
                 return (
                   <div key={i} className="bg-white p-3.5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm">
