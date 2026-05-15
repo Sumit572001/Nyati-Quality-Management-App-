@@ -727,16 +727,15 @@ function SEIndex() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const current = categoryStages[c.name];
-                                      setCategoryStages(prev => ({ 
-                                        ...prev, 
-                                        [c.name]: current === stage ? '' : stage 
+                                      setCategoryStages(prev => ({
+                                        ...prev,
+                                        [c.name]: current === stage ? '' : stage
                                       }));
                                     }}
-                                    className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${
-                                      isStageSelected 
-                                        ? 'bg-[#004080] text-white border-[#004080] shadow-md' 
-                                        : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
-                                    }`}
+                                    className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
+                                      ? 'bg-[#004080] text-white border-[#004080] shadow-md'
+                                      : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
+                                      }`}
                                   >
                                     <span>{stage}</span>
                                     {isStageSelected ? (
@@ -779,71 +778,71 @@ function SEIndex() {
                       return stageName === selectedStage || stageName === 'General'; // Always show general or the matched stage
                     })
                     .map(([stageName, items], si) => (
-                    <div key={si} className="space-y-4">
-                      {stageName !== 'General' && (
-                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2 italic">
-                          Stage: {stageName}
-                        </h4>
-                      )}
-                      <div className="space-y-3">
-                        {items.map((it, ii) => {
-                          const cleanQ = (it.questionText || '').toString().trim().toLowerCase();
-                          const isPassed = Array.isArray(passedQuestions) && passedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ);
-                          const isRejected = Array.isArray(rejectedQuestions) && rejectedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed;
-                          const isPending = Array.isArray(pendingQuestions) && pendingQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed && !isRejected;
-                          return (
-                            <div key={ii}>
-                              {isPassed ? (
-                                <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-green-500 text-sm">✅</span>
-                                    <label className="text-[11px] text-gray-400 line-through leading-tight block">
+                      <div key={si} className="space-y-4">
+                        {stageName !== 'General' && (
+                          <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2 italic">
+                            Stage: {stageName}
+                          </h4>
+                        )}
+                        <div className="space-y-3">
+                          {items.map((it, ii) => {
+                            const cleanQ = (it.questionText || '').toString().trim().toLowerCase();
+                            const isPassed = Array.isArray(passedQuestions) && passedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ);
+                            const isRejected = Array.isArray(rejectedQuestions) && rejectedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed;
+                            const isPending = Array.isArray(pendingQuestions) && pendingQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed && !isRejected;
+                            return (
+                              <div key={ii}>
+                                {isPassed ? (
+                                  <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-green-500 text-sm">✅</span>
+                                      <label className="text-[11px] text-gray-400 line-through leading-tight block">
+                                        {it.questionText}
+                                      </label>
+                                    </div>
+                                    <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
+                                  </div>
+                                ) : isRejected ? (
+                                  <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-red-500 text-sm">❌</span>
+                                      <label className="text-[11px] text-red-400 line-through leading-tight block">
+                                        {it.questionText}
+                                      </label>
+                                    </div>
+                                    <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
+                                  </div>
+                                ) : isPending ? (
+                                  <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-orange-400 text-sm">⏳</span>
+                                      <label className="text-[11px] text-gray-400 leading-tight block">
+                                        {it.questionText}
+                                      </label>
+                                    </div>
+                                    <span className="text-[9px] text-orange-500 font-bold">Awaiting QE Action</span>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
+                                  >
+                                    <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
                                       {it.questionText}
                                     </label>
+                                    <StatusSelector
+                                      itemId={it._id}
+                                      value={itemSelection[it._id]}
+                                      onChange={(id, val) => handleItemCheckboxChange(id, val)}
+                                      isPassed={false}
+                                    />
                                   </div>
-                                  <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
-                                </div>
-                              ) : isRejected ? (
-                                <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-red-500 text-sm">❌</span>
-                                    <label className="text-[11px] text-red-400 line-through leading-tight block">
-                                      {it.questionText}
-                                    </label>
-                                  </div>
-                                  <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
-                                </div>
-                              ) : isPending ? (
-                                <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-orange-400 text-sm">⏳</span>
-                                    <label className="text-[11px] text-gray-400 leading-tight block">
-                                      {it.questionText}
-                                    </label>
-                                  </div>
-                                  <span className="text-[9px] text-orange-500 font-bold">Awaiting QE Action</span>
-                                </div>
-                              ) : (
-                                <div
-                                  className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
-                                >
-                                  <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
-                                    {it.questionText}
-                                  </label>
-                                  <StatusSelector
-                                    itemId={it._id}
-                                    value={itemSelection[it._id]}
-                                    onChange={(id, val) => handleItemCheckboxChange(id, val)}
-                                    isPassed={false}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             ))}
