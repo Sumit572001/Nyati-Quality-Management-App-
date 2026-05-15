@@ -13,6 +13,7 @@ function AdminPanel() {
   // Form States
   const [category, setCategory] = useState('')
   const [question, setQuestion] = useState('')
+  const [subCategory, setSubCategory] = useState('') // New state
   const [newName, setNewName] = useState('') // For Building, Floor, Unit, Category names
 
   // Selection States for Floor/Unit Creation
@@ -74,11 +75,13 @@ function AdminPanel() {
     try {
       const res = await axios.post(`${BASE_URL}/api/add-checklist-item`, {
         category,
+        subCategory,
         questionText: question
       })
       if (res.data.success) {
         alert('New Checklist Added.')
         setQuestion('')
+        setSubCategory('') // Clear it after success
         loadData()
       }
     } catch (err) { alert('Error adding checklist') }
@@ -191,6 +194,19 @@ function AdminPanel() {
                 {categories.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
               </select>
 
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Sub-Category (Phase/Stage - Optional)</label>
+              <select
+                value={subCategory}
+                onChange={e => setSubCategory(e.target.value)}
+                className="w-full p-3 border border-gray-200 rounded-xl text-sm mb-4 mt-1 outline-none focus:border-[#004080]"
+              >
+                <option value="">-- No Sub-Category --</option>
+                <option value="Pre Construction">Pre Construction</option>
+                <option value="During & After">During & After</option>
+                <option value="During">During Construction</option>
+                <option value="After">After Construction</option>
+              </select>
+
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Inspection Question</label>
               <input
                 type="text"
@@ -269,7 +285,10 @@ function AdminPanel() {
             {activeTab === 'checklist' && items.map(item => (
               <div key={item._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
                 <div>
-                  <div className="text-[9px] font-black text-[#E76F2E] uppercase">{item.category}</div>
+                  <div className="flex gap-2 items-center">
+                    <span className="text-[9px] font-black text-[#E76F2E] uppercase">{item.category}</span>
+                    {item.subCategory && <span className="text-[9px] font-black text-blue-500 uppercase px-1.5 py-0.5 bg-blue-50 rounded italic">{item.subCategory}</span>}
+                  </div>
                   <div className="text-sm text-gray-700 font-medium">{item.questionText}</div>
                 </div>
                 <button onClick={() => deleteItem(item._id, 'delete-checklist-item')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>

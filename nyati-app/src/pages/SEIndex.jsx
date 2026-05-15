@@ -215,6 +215,8 @@ function SEIndex() {
   });
   const [passedQuestions, setPassedQuestions] = useState([]); // Questions already passed for this unit
   const [rejectedQuestions, setRejectedQuestions] = useState([]); // Questions rejected and needing rework
+  const [pendingQuestions, setPendingQuestions] = useState([]); // Questions awaiting QE action
+  const [categoryStages, setCategoryStages] = useState({}); // Stores selected stage for each category { "Dado": "Pre Construction" }
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -296,10 +298,13 @@ function SEIndex() {
       ]);
       const grouped = {}
       clRes.data.forEach(item => {
-        if (!grouped[item.category]) grouped[item.category] = []
-        grouped[item.category].push(item)
+        if (!grouped[item.category]) grouped[item.category] = {}
+        const sub = item.subCategory || 'General'
+        if (!grouped[item.category][sub]) grouped[item.category][sub] = []
+        grouped[item.category][sub].push(item)
       })
-      setCategories(Object.entries(grouped).map(([name, items]) => ({ name, items })))
+      // Convert to a format that SEIndex expects: Array of { name, stages: { stageName: items[] } }
+      setCategories(Object.entries(grouped).map(([name, stages]) => ({ name, stages })))
       setBuildingOptions([...bldRes.data.map(b => b.name)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })))
     } catch (err) {
       console.error("Initial fetch error", err);
@@ -323,7 +328,16 @@ function SEIndex() {
   };
 
   const toggleCategory = (cat) => {
-    setSelectedCats(prev => prev.find(c => c.name === cat.name) ? prev.filter(c => c.name !== cat.name) : [...prev, cat]);
+    const isSelected = selectedCats.find(c => c.name === cat.name);
+    if (isSelected) {
+      setSelectedCats(prev => prev.filter(c => c.name !== cat.name));
+      const updatedStages = { ...categoryStages };
+      delete updatedStages[cat.name];
+      setCategoryStages(updatedStages);
+    } else {
+      setSelectedCats(prev => [...prev, cat]);
+      // Default to '' (All) if not set
+    }
   }
 
   const handleInitialSubmit = async () => {
@@ -343,6 +357,7 @@ function SEIndex() {
       });
       setPassedQuestions(res.data.passedQuestions || []);
       setRejectedQuestions(res.data.rejectedQuestions || []);
+      setPendingQuestions(res.data.pendingQuestions || []);
       setView('checklist');
     } catch (err) {
       console.error("Error fetching passed checkpoints", err);
@@ -369,19 +384,22 @@ function SEIndex() {
       items: []
     }
     selectedCats.forEach(cat => {
-      cat.items.forEach(item => {
-        const selection = itemSelection[item._id];
-        if (selection) {
-          reportData.items.push({
-            category: cat.name,
-            question: item.questionText,
-            status: selection === 'yes' ? 'Completed' : selection === 'no' ? 'Rejected' : 'N/A',
-            seDecision: selection,
-            submittedAt: reportData.submittedAt
-          });
-        }
-      })
-    })
+      Object.entries(cat.stages || {}).forEach(([stageName, items]) => {
+        items.forEach(item => {
+          const selection = itemSelection[item._id];
+          if (selection) {
+            reportData.items.push({
+              category: cat.name,
+              stage: stageName === 'General' ? '' : stageName, // optional
+              question: item.questionText,
+              status: selection === 'yes' ? 'Completed' : selection === 'no' ? 'Rejected' : 'N/A',
+              seDecision: selection,
+              submittedAt: reportData.submittedAt
+            });
+          }
+        });
+      });
+    });
     if (reportData.items.length === 0) return alert("Koi bhi item select nahi kiya!");
     try {
       setLoading(true);
@@ -641,7 +659,8 @@ function SEIndex() {
                 const s = (r.status || '').toString().toLowerCase();
                 return s === 'approved' || s === 'returned';
               }).map((r, i) => {
-                const isPass = r.status === 'Approved';
+                const hasFailure = Array.isArray(r.items) && r.items.some(item => item.qeDecision === 'fail');
+                const isPass = r.status === 'Approved' && !hasFailure;
                 return (
                   <div key={i} className="bg-white p-3.5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isPass ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
@@ -679,7 +698,63 @@ function SEIndex() {
             <div className="space-y-4">
               <h3 className="text-[#004080] font-black text-xs uppercase border-l-4 border-[#004080] pl-2 ml-1">Categories</h3>
               <div onClick={() => setShowQCDropdown(!showQCDropdown)} className="p-4 border-2 border-gray-200 rounded-xl bg-white flex justify-between items-center cursor-pointer shadow-sm"><span className="text-xs font-bold truncate pr-4 text-gray-700">{selectedCats.length > 0 ? selectedCats.map(c => c.name).join(', ') : '-- SELECT --'}</span><FontAwesomeIcon icon={showQCDropdown ? faChevronUp : faChevronDown} className="text-gray-400" /></div>
-              {showQCDropdown && <div className="bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto">{categories.map((c, i) => (<div key={i} onClick={() => toggleCategory(c)} className={`p-4 border-b flex justify-between items-center ${selectedCats.find(s => s.name === c.name) ? 'bg-blue-50' : ''}`}><span className="text-xs font-bold">{c.name}</span><FontAwesomeIcon icon={selectedCats.find(s => s.name === c.name) ? faCheckSquare : faSquare} className={selectedCats.find(s => s.name === c.name) ? 'text-[#004080]' : 'text-gray-300'} /></div>))}</div>}
+              {showQCDropdown && (
+                <div className="bg-white border rounded-xl shadow-xl max-h-[400px] overflow-y-auto">
+                  {categories.map((c, i) => {
+                    const isSelected = selectedCats.find(s => s.name === c.name);
+                    return (
+                      <div key={i} className="border-b last:border-0 p-1">
+                        <div
+                          onClick={() => toggleCategory(c)}
+                          className={`p-3.5 flex justify-between items-center cursor-pointer rounded-lg transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                        >
+                          <span className={`text-xs font-bold ${isSelected ? 'text-[#004080]' : 'text-gray-700'}`}>{c.name}</span>
+                          <FontAwesomeIcon
+                            icon={isSelected ? faCheckSquare : faSquare}
+                            className={isSelected ? 'text-[#004080]' : 'text-gray-300'}
+                          />
+                        </div>
+
+                        {/* STAGE SELECTION LIST - Compact Vertical stack */}
+                        {isSelected && (
+                          <div className="mx-3 mb-3 p-3 bg-white border border-blue-50 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 shadow-inner">
+                            <div className="flex flex-col gap-2">
+                              {['Pre Construction', 'During & After', 'During', 'After'].map(stage => {
+                                const isStageSelected = categoryStages[c.name] === stage;
+                                return (
+                                  <button
+                                    key={stage}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const current = categoryStages[c.name];
+                                      setCategoryStages(prev => ({ 
+                                        ...prev, 
+                                        [c.name]: current === stage ? '' : stage 
+                                      }));
+                                    }}
+                                    className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${
+                                      isStageSelected 
+                                        ? 'bg-[#004080] text-white border-[#004080] shadow-md' 
+                                        : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <span>{stage}</span>
+                                    {isStageSelected ? (
+                                      <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
+                                    ) : (
+                                      <div className="w-4 h-4 rounded-full border-2 border-gray-200"></div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <button onClick={handleInitialSubmit} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-200 tracking-widest text-sm translate-y-4">Go to Checklist</button>
           </div>
@@ -696,54 +771,79 @@ function SEIndex() {
                 <div className="bg-[#004080] text-white p-4 font-black text-[10px] uppercase">
                   <span>{cat.name}</span>
                 </div>
-                <div className="p-4 space-y-4 bg-gray-50">
-                  {cat.items.map((it, ii) => {
-                    const cleanQ = (it.questionText || '').toString().trim().toLowerCase();
-                    const isPassed = Array.isArray(passedQuestions) && passedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ);
-                    const isRejected = Array.isArray(rejectedQuestions) && rejectedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed;
-                    return (
-                      <div key={ii}>
-                        {isPassed ? (
-                          // PASSED - green inactive
-                          <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-500 text-sm">✅</span>
-                              <label className="text-[11px] text-gray-400 line-through leading-tight block">
-                                {it.questionText}
-                              </label>
+                <div className="p-4 space-y-8 bg-gray-50">
+                  {Object.entries(cat.stages || {})
+                    .filter(([stageName]) => {
+                      const selectedStage = categoryStages[cat.name];
+                      if (!selectedStage) return true; // Show all if none selected
+                      return stageName === selectedStage || stageName === 'General'; // Always show general or the matched stage
+                    })
+                    .map(([stageName, items], si) => (
+                    <div key={si} className="space-y-4">
+                      {stageName !== 'General' && (
+                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2 italic">
+                          Stage: {stageName}
+                        </h4>
+                      )}
+                      <div className="space-y-3">
+                        {items.map((it, ii) => {
+                          const cleanQ = (it.questionText || '').toString().trim().toLowerCase();
+                          const isPassed = Array.isArray(passedQuestions) && passedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ);
+                          const isRejected = Array.isArray(rejectedQuestions) && rejectedQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed;
+                          const isPending = Array.isArray(pendingQuestions) && pendingQuestions.some(q => q.toString().trim().toLowerCase() === cleanQ) && !isPassed && !isRejected;
+                          return (
+                            <div key={ii}>
+                              {isPassed ? (
+                                <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-green-500 text-sm">✅</span>
+                                    <label className="text-[11px] text-gray-400 line-through leading-tight block">
+                                      {it.questionText}
+                                    </label>
+                                  </div>
+                                  <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
+                                </div>
+                              ) : isRejected ? (
+                                <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-red-500 text-sm">❌</span>
+                                    <label className="text-[11px] text-red-400 line-through leading-tight block">
+                                      {it.questionText}
+                                    </label>
+                                  </div>
+                                  <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
+                                </div>
+                              ) : isPending ? (
+                                <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-orange-400 text-sm">⏳</span>
+                                    <label className="text-[11px] text-gray-400 leading-tight block">
+                                      {it.questionText}
+                                    </label>
+                                  </div>
+                                  <span className="text-[9px] text-orange-500 font-bold">Awaiting QE Action</span>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
+                                >
+                                  <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
+                                    {it.questionText}
+                                  </label>
+                                  <StatusSelector
+                                    itemId={it._id}
+                                    value={itemSelection[it._id]}
+                                    onChange={(id, val) => handleItemCheckboxChange(id, val)}
+                                    isPassed={false}
+                                  />
+                                </div>
+                              )}
                             </div>
-                            <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
-                          </div>
-                        ) : isRejected ? (
-                          // REJECTED - red inactive
-                          <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
-                            <div className="flex items-center gap-2">
-                              <span className="text-red-500 text-sm">❌</span>
-                              <label className="text-[11px] text-red-400 line-through leading-tight block">
-                                {it.questionText}
-                              </label>
-                            </div>
-                            <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
-                          </div>
-                        ) : (
-                          // ACTIVE - normal interactive
-                          <div
-                            className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
-                          >
-                            <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
-                              {it.questionText}
-                            </label>
-                            <StatusSelector
-                              itemId={it._id}
-                              value={itemSelection[it._id]}
-                              onChange={(id, val) => handleItemCheckboxChange(id, val)}
-                              isPassed={false}
-                            />
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
