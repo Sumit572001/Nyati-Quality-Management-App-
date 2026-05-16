@@ -297,9 +297,12 @@ function SEIndex() {
         axios.get(`${BASE_URL}/api/buildings`)
       ]);
       const grouped = {}
-      clRes.data.forEach(item => {
+      // Sort items by _id (creation order) to match Excel sequence
+      const sortedItems = [...clRes.data].sort((a, b) => (a._id || '').localeCompare(b._id || ''));
+
+      sortedItems.forEach(item => {
         if (!grouped[item.category]) grouped[item.category] = {}
-        const sub = item.subCategory || 'General'
+        const sub = (item.subCategory || '').toString().trim() || 'General'
         if (!grouped[item.category][sub]) grouped[item.category][sub] = []
         grouped[item.category][sub].push(item)
       })
@@ -719,33 +722,35 @@ function SEIndex() {
                         {isSelected && (
                           <div className="mx-3 mb-3 p-3 bg-white border border-blue-50 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 shadow-inner">
                             <div className="flex flex-col gap-2">
-                              {['Pre Construction', 'During & After', 'During', 'After'].map(stage => {
-                                const isStageSelected = categoryStages[c.name] === stage;
-                                return (
-                                  <button
-                                    key={stage}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const current = categoryStages[c.name];
-                                      setCategoryStages(prev => ({
-                                        ...prev,
-                                        [c.name]: current === stage ? '' : stage
-                                      }));
-                                    }}
-                                    className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
-                                      ? 'bg-[#004080] text-white border-[#004080] shadow-md'
-                                      : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
-                                      }`}
-                                  >
-                                    <span>{stage}</span>
-                                    {isStageSelected ? (
-                                      <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
-                                    ) : (
-                                      <div className="w-4 h-4 rounded-full border-2 border-gray-200"></div>
-                                    )}
-                                  </button>
-                                );
-                              })}
+                              {['Pre Work', 'During Work', 'After Work']
+                                .filter(stage => c.stages && c.stages[stage] && c.stages[stage].length > 0)
+                                .map(stage => {
+                                  const isStageSelected = categoryStages[c.name] === stage;
+                                  return (
+                                    <button
+                                      key={stage}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const current = categoryStages[c.name];
+                                        setCategoryStages(prev => ({
+                                          ...prev,
+                                          [c.name]: current === stage ? '' : stage
+                                        }));
+                                      }}
+                                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
+                                        ? 'bg-[#004080] text-white border-[#004080] shadow-md'
+                                        : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                      <span>{stage}</span>
+                                      {isStageSelected ? (
+                                        <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
+                                      ) : (
+                                        <div className="w-4 h-4 rounded-full border-2 border-gray-200"></div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
                             </div>
                           </div>
                         )}
@@ -775,7 +780,11 @@ function SEIndex() {
                     .filter(([stageName]) => {
                       const selectedStage = categoryStages[cat.name];
                       if (!selectedStage) return true; // Show all if none selected
-                      return stageName === selectedStage || stageName === 'General'; // Always show general or the matched stage
+
+                      // Strict matching for selected stage
+                      // We only show 'General' items if they were specifically selected (if we add that)
+                      // or if no specific stage is chosen.
+                      return stageName === selectedStage;
                     })
                     .map(([stageName, items], si) => (
                       <div key={si} className="space-y-4">

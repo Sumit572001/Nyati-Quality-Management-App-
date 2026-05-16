@@ -47,7 +47,7 @@ function AdminPanel() {
         axios.get(`${BASE_URL}/api/floors`),
         axios.get(`${BASE_URL}/api/units`)
       ]);
-      setItems(resCl.data);
+      setItems([...resCl.data].sort((a, b) => (a._id || '').localeCompare(b._id || '')));
       setCategories(resCat.data);
       setBuildings(resBld.data);
       setFloors(resFlr.data);
@@ -201,10 +201,9 @@ function AdminPanel() {
                 className="w-full p-3 border border-gray-200 rounded-xl text-sm mb-4 mt-1 outline-none focus:border-[#004080]"
               >
                 <option value="">-- No Sub-Category --</option>
-                <option value="Pre Construction">Pre Construction</option>
-                <option value="During & After">During & After</option>
-                <option value="During">During Construction</option>
-                <option value="After">After Construction</option>
+                <option value="Pre Work">Pre Work</option>
+                <option value="During Work">During Work</option>
+                <option value="After Work">After Work</option>
               </select>
 
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Inspection Question</label>
