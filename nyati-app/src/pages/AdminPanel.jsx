@@ -235,20 +235,20 @@ function AdminPanel() {
                     placeholder="Enter checkpoint description..."
                     className="flex-1 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-[#004080]"
                   />
-                  <button 
+                  <button
                     onClick={async () => {
-                      if(!question.trim()) return;
+                      if (!question.trim()) return;
                       setLoading(true);
                       try {
                         await axios.post(`${BASE_URL}/api/pour-card-checkpoints`, { questionText: question });
                         setQuestion('');
                         loadData();
-                      } catch(e) { 
+                      } catch (e) {
                         console.error(e);
-                        alert(`Failed to add: ${e.response?.data?.error || e.message}`); 
+                        alert(`Failed to add: ${e.response?.data?.error || e.message}`);
                       }
                       setLoading(false);
-                    }} 
+                    }}
                     disabled={loading}
                     className="bg-[#004080] text-white px-4 rounded-xl text-xs font-bold uppercase transition-all active:scale-95"
                   >
@@ -264,14 +264,14 @@ function AdminPanel() {
                     {pourCardCheckpoints.map(cp => (
                       <div key={cp._id} className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
                         <span className="text-[11px] text-gray-700 font-medium pl-1">{cp.questionText}</span>
-                        <button 
+                        <button
                           onClick={async () => {
-                            if(!window.confirm('Remove this global checkpoint?')) return;
+                            if (!window.confirm('Remove this global checkpoint?')) return;
                             try {
                               await axios.delete(`${BASE_URL}/api/pour-card-checkpoints/${cp._id}`);
                               loadData();
-                            } catch(e) { alert('Delete failed'); }
-                          }} 
+                            } catch (e) { alert('Delete failed'); }
+                          }}
                           className="text-red-400 p-2"
                         >
                           <FontAwesomeIcon icon={faTrash} />
@@ -288,20 +288,20 @@ function AdminPanel() {
                   {categories.map(cat => (
                     <div key={cat._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
                       <span className="text-xs font-bold text-gray-700">{cat.name}</span>
-                      <input 
-                        type="checkbox" 
-                        checked={cat.isPourCardEnabled} 
+                      <input
+                        type="checkbox"
+                        checked={cat.isPourCardEnabled}
                         onChange={async (e) => {
                           setLoading(true);
                           try {
-                            await axios.post(`${BASE_URL}/api/toggle-pour-card-category`, { 
-                              categoryId: cat._id, 
-                              enabled: e.target.checked 
+                            await axios.post(`${BASE_URL}/api/toggle-pour-card-category`, {
+                              categoryId: cat._id,
+                              enabled: e.target.checked
                             });
                             loadData();
-                          } catch(err) { 
+                          } catch (err) {
                             console.error(err);
-                            alert(`Sync Failed: ${err.response?.data?.error || err.message}`); 
+                            alert(`Sync Failed: ${err.response?.data?.error || err.message}`);
                           }
                           setLoading(false);
                         }}
