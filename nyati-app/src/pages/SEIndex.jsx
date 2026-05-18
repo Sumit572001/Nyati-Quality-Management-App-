@@ -722,7 +722,7 @@ function SEIndex() {
                         {isSelected && (
                           <div className="mx-3 mb-3 p-3 bg-white border border-blue-50 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 shadow-inner">
                             <div className="flex flex-col gap-2">
-                              {['Pre Work', 'During Work', 'After Work']
+                              {['Pre Work', 'Pour Card', 'During Work', 'After Work']
                                 .filter(stage => c.stages && c.stages[stage] && c.stages[stage].length > 0)
                                 .map(stage => {
                                   const isStageSelected = categoryStages[c.name] === stage;

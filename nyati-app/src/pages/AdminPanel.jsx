@@ -26,6 +26,7 @@ function AdminPanel() {
   const [buildings, setBuildings] = useState([])
   const [floors, setFloors] = useState([])
   const [units, setUnits] = useState([])
+  const [pourCardCheckpoints, setPourCardCheckpoints] = useState([]) // New state
 
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -40,18 +41,20 @@ function AdminPanel() {
   // Generic Load Function
   const loadData = async () => {
     try {
-      const [resCl, resCat, resBld, resFlr, resUnit] = await Promise.all([
+      const [resCl, resCat, resBld, resFlr, resUnit, resPc] = await Promise.all([
         axios.get(`${BASE_URL}/api/checklist-items`),
         axios.get(`${BASE_URL}/api/categories`),
         axios.get(`${BASE_URL}/api/buildings`),
         axios.get(`${BASE_URL}/api/floors`),
-        axios.get(`${BASE_URL}/api/units`)
+        axios.get(`${BASE_URL}/api/units`),
+        axios.get(`${BASE_URL}/api/pour-card-checkpoints`)
       ]);
       setItems([...resCl.data].sort((a, b) => (a._id || '').localeCompare(b._id || '')));
       setCategories(resCat.data);
       setBuildings(resBld.data);
       setFloors(resFlr.data);
       setUnits(resUnit.data);
+      setPourCardCheckpoints(resPc.data);
 
       // Set default category if available
       if (resCat.data.length > 0 && !category) {
@@ -140,6 +143,7 @@ function AdminPanel() {
     { id: 'building', label: 'Building', icon: faBuilding },
     { id: 'floor', label: 'Floor', icon: faStairs },
     { id: 'unit', label: 'Unit/Area', icon: faHome },
+    { id: 'pourcard', label: 'Pour Card', icon: faList }, // New tab
   ]
 
   // Filter floors based on selected building for Unit tab
@@ -202,6 +206,7 @@ function AdminPanel() {
               >
                 <option value="">-- No Sub-Category --</option>
                 <option value="Pre Work">Pre Work</option>
+                <option value="Pour Card">Pour Card</option>
                 <option value="During Work">During Work</option>
                 <option value="After Work">After Work</option>
               </select>
@@ -218,6 +223,95 @@ function AdminPanel() {
                 {loading ? 'Processing...' : 'Add Checklist Point'}
               </button>
             </>
+          ) : activeTab === 'pourcard' ? (
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Add Global Pour Card Checkpoint</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={question}
+                    onChange={e => setQuestion(e.target.value)}
+                    placeholder="Enter checkpoint description..."
+                    className="flex-1 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-[#004080]"
+                  />
+                  <button 
+                    onClick={async () => {
+                      if(!question.trim()) return;
+                      setLoading(true);
+                      try {
+                        await axios.post(`${BASE_URL}/api/pour-card-checkpoints`, { questionText: question });
+                        setQuestion('');
+                        loadData();
+                      } catch(e) { 
+                        console.error(e);
+                        alert(`Failed to add: ${e.response?.data?.error || e.message}`); 
+                      }
+                      setLoading(false);
+                    }} 
+                    disabled={loading}
+                    className="bg-[#004080] text-white px-4 rounded-xl text-xs font-bold uppercase transition-all active:scale-95"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {pourCardCheckpoints.length > 0 && (
+                <div className="pt-4 border-t">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 block mb-2">Current Global Checkpoints</label>
+                  <div className="space-y-2">
+                    {pourCardCheckpoints.map(cp => (
+                      <div key={cp._id} className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                        <span className="text-[11px] text-gray-700 font-medium pl-1">{cp.questionText}</span>
+                        <button 
+                          onClick={async () => {
+                            if(!window.confirm('Remove this global checkpoint?')) return;
+                            try {
+                              await axios.delete(`${BASE_URL}/api/pour-card-checkpoints/${cp._id}`);
+                              loadData();
+                            } catch(e) { alert('Delete failed'); }
+                          }} 
+                          className="text-red-400 p-2"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 mb-2 block">Enable Pour Card for Categories</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {categories.map(cat => (
+                    <div key={cat._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <span className="text-xs font-bold text-gray-700">{cat.name}</span>
+                      <input 
+                        type="checkbox" 
+                        checked={cat.isPourCardEnabled} 
+                        onChange={async (e) => {
+                          setLoading(true);
+                          try {
+                            await axios.post(`${BASE_URL}/api/toggle-pour-card-category`, { 
+                              categoryId: cat._id, 
+                              enabled: e.target.checked 
+                            });
+                            loadData();
+                          } catch(err) { 
+                            console.error(err);
+                            alert(`Sync Failed: ${err.response?.data?.error || err.message}`); 
+                          }
+                          setLoading(false);
+                        }}
+                        className="w-5 h-5 accent-[#004080]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               {/* Conditional Dropdowns for Floor and Unit */}
@@ -267,45 +361,47 @@ function AdminPanel() {
         </div>
 
         {/* ===== LIST DISPLAY SECTION ===== */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-gray-700 font-bold text-xs uppercase">Current {activeTab}s</h3>
-            <span className="bg-blue-50 text-[#004080] text-[10px] px-2 py-1 rounded-full font-bold">
-              Total: {
-                activeTab === 'checklist' ? items.length :
-                  activeTab === 'category' ? categories.length :
-                    activeTab === 'building' ? buildings.length :
-                      activeTab === 'floor' ? floors.length : units.length
-              }
-            </span>
-          </div>
+        {activeTab !== 'pourcard' && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-gray-700 font-bold text-xs uppercase">Current {activeTab}s</h3>
+              <span className="bg-blue-50 text-[#004080] text-[10px] px-2 py-1 rounded-full font-bold">
+                Total: {
+                  activeTab === 'checklist' ? items.length :
+                    activeTab === 'category' ? categories.length :
+                      activeTab === 'building' ? buildings.length :
+                        activeTab === 'floor' ? floors.length : units.length
+                }
+              </span>
+            </div>
 
-          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-            {activeTab === 'checklist' && items.map(item => (
-              <div key={item._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <div>
-                  <div className="flex gap-2 items-center">
-                    <span className="text-[9px] font-black text-[#E76F2E] uppercase">{item.category}</span>
-                    {item.subCategory && <span className="text-[9px] font-black text-blue-500 uppercase px-1.5 py-0.5 bg-blue-50 rounded italic">{item.subCategory}</span>}
+            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+              {activeTab === 'checklist' && items.map(item => (
+                <div key={item._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div>
+                    <div className="flex gap-2 items-center">
+                      <span className="text-[9px] font-black text-[#E76F2E] uppercase">{item.category}</span>
+                      {item.subCategory && <span className="text-[9px] font-black text-blue-500 uppercase px-1.5 py-0.5 bg-blue-50 rounded italic">{item.subCategory}</span>}
+                    </div>
+                    <div className="text-sm text-gray-700 font-medium">{item.questionText}</div>
                   </div>
-                  <div className="text-sm text-gray-700 font-medium">{item.questionText}</div>
+                  <button onClick={() => deleteItem(item._id, 'delete-checklist-item')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>
                 </div>
-                <button onClick={() => deleteItem(item._id, 'delete-checklist-item')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>
-              </div>
-            ))}
+              ))}
 
-            {activeTab !== 'checklist' && (activeTab === 'category' ? categories : activeTab === 'building' ? buildings : activeTab === 'floor' ? floors : units).map(m => (
-              <div key={m._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <div>
-                  <span className="text-sm text-gray-700 font-bold">{m.name}</span>
-                  {activeTab === 'floor' && <div className="text-[9px] text-gray-400 font-bold uppercase">Building: {m.buildingName}</div>}
-                  {activeTab === 'unit' && <div className="text-[9px] text-gray-400 font-bold uppercase">Bldg: {m.buildingName} | Flr: {m.floorName}</div>}
+              {activeTab !== 'checklist' && (activeTab === 'category' ? categories : activeTab === 'building' ? buildings : activeTab === 'floor' ? floors : units).map(m => (
+                <div key={m._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div>
+                    <span className="text-sm text-gray-700 font-bold">{m.name}</span>
+                    {activeTab === 'floor' && <div className="text-[9px] text-gray-400 font-bold uppercase">Building: {m.buildingName}</div>}
+                    {activeTab === 'unit' && <div className="text-[9px] text-gray-400 font-bold uppercase">Bldg: {m.buildingName} | Flr: {m.floorName}</div>}
+                  </div>
+                  <button onClick={() => deleteItem(m._id, activeTab === 'category' ? 'categories' : activeTab + 's')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>
                 </div>
-                <button onClick={() => deleteItem(m._id, activeTab === 'category' ? 'categories' : activeTab + 's')} className="text-red-400 p-2"><FontAwesomeIcon icon={faTrash} /></button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
