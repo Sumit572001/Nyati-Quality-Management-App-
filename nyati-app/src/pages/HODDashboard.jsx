@@ -22,7 +22,11 @@ const HODDashboard = () => {
     const [user, setUser] = useState(null);
     const [summary, setSummary] = useState({ totalReworks: 0, totalReworkItems: 0, projectWise: [] });
     const [selectedProject, setSelectedProject] = useState('All Projects');
+    const [filterStatus, setFilterStatus] = useState('All'); // New: All/Open/Closed
+    const [startDate, setStartDate] = useState(''); // New: From Date
+    const [endDate, setEndDate] = useState(''); // New: To Date
     const [projectDetails, setProjectDetails] = useState(null);
+    const [statusDropdownOpen, setStatusDropdownOpen] = useState(false); // New: Custom dropdown state
     const [loading, setLoading] = useState(true);
     const [expandedCategory, setExpandedCategory] = useState(null);
 
@@ -43,13 +47,18 @@ const HODDashboard = () => {
 
     const fetchSummary = useCallback(async () => {
         try {
-            const res = await axios.get(`${BASE_URL}/api/hod/rework-summary`);
+            const params = new URLSearchParams();
+            params.append('status', filterStatus);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            const res = await axios.get(`${BASE_URL}/api/hod/rework-summary?${params.toString()}`);
             setSummary(res.data);
             setLoading(false);
         } catch (err) {
             console.error("Summary fetch error", err);
         }
-    }, []);
+    }, [filterStatus, startDate, endDate]);
 
     const fetchProjectDetails = useCallback(async (projectName) => {
         if (projectName === 'All Projects') {
@@ -58,14 +67,20 @@ const HODDashboard = () => {
         }
         setLoading(true);
         try {
-            const res = await axios.get(`${BASE_URL}/api/hod/project-reworks?project=${encodeURIComponent(projectName)}`);
+            const params = new URLSearchParams();
+            params.append('project', projectName);
+            params.append('status', filterStatus);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            const res = await axios.get(`${BASE_URL}/api/hod/project-reworks?${params.toString()}`);
             setProjectDetails(res.data);
         } catch (err) {
             console.error("Project detail fetch error", err);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [filterStatus, startDate, endDate]);
 
     // Initial Fetch & Interval
     useEffect(() => {
@@ -78,9 +93,19 @@ const HODDashboard = () => {
 
     const handleProjectChange = (name) => {
         setSelectedProject(name);
-        fetchProjectDetails(name);
         setExpandedCategory(null);
     };
+
+    // Effect to refetch summary/details when filters change
+    useEffect(() => {
+        fetchSummary();
+    }, [fetchSummary]);
+
+    useEffect(() => {
+        if (selectedProject !== 'All Projects') {
+            fetchProjectDetails(selectedProject);
+        }
+    }, [selectedProject, fetchProjectDetails]);
 
     const handleLogout = () => {
         localStorage.removeItem('nyati_user');
@@ -162,27 +187,111 @@ const HODDashboard = () => {
 
                 </div>
 
-                {/* FILTER DROPDOWN */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500">
-                            <FontAwesomeIcon icon={faFilter} />
+                {/* FILTER SECTION */}
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* 1. Project Filter */}
+                        <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Project</label>
+                            <div className="relative group">
+                                <select
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full cursor-pointer"
+                                    value={selectedProject}
+                                    onChange={(e) => handleProjectChange(e.target.value)}
+                                >
+                                    <option value="All Projects">All Projects</option>
+                                    {summary.projectWise.map(p => (
+                                        <option key={p.projectName} value={p.projectName}>{p.projectName}</option>
+                                    ))}
+                                </select>
+                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]" />
+                            </div>
                         </div>
-                        <h3 className="font-bold text-sm">Filter by Project</h3>
+
+                        {/* 2. Custom Status Dropdown with Radios */}
+                        <div className="relative">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Status Filter</label>
+                            <button
+                                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                className="flex items-center justify-between bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 w-full hover:border-[#004080] transition group shadow-sm"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${filterStatus === 'All' ? 'bg-blue-500' : filterStatus === 'Open' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                                    <span>{filterStatus === 'Closed' ? 'Closed / Approved' : filterStatus === 'Open' ? 'Open Reworks' : 'All Reworks'}</span>
+                                </div>
+                                <FontAwesomeIcon icon={faChevronDown} className={`text-gray-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {statusDropdownOpen && (
+                                <>
+                                    {/* Backdrop to close */}
+                                    <div className="fixed inset-0 z-10" onClick={() => setStatusDropdownOpen(false)}></div>
+
+                                    {/* Dropdown Menu */}
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top">
+                                        {['All', 'Open', 'Closed'].map((s) => (
+                                            <div
+                                                key={s}
+                                                onClick={() => {
+                                                    setFilterStatus(s);
+                                                    setStatusDropdownOpen(false);
+                                                }}
+                                                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
+                                            >
+                                                {/* Custom Radio Button UI */}
+                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterStatus === s ? 'border-[#004080]' : 'border-gray-200'}`}>
+                                                    {filterStatus === s && <div className="w-2 h-2 rounded-full bg-[#004080]"></div>}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`w-2 h-2 rounded-full ${s === 'All' ? 'bg-blue-500' : s === 'Open' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                                                    <span className={`text-xs font-bold ${filterStatus === s ? 'text-[#004080]' : 'text-gray-600'}`}>
+                                                        {s === 'All' ? 'All Reworks' : s === 'Open' ? 'Open Reworks' : 'Closed / Approved'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* 3. From Date */}
+                        <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">From Date</label>
+                            <input
+                                type="date"
+                                className="bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
+                        </div>
+
+                        {/* 4. To Date */}
+                        <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">To Date</label>
+                            <input
+                                type="date"
+                                className="bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                            />
+                        </div>
                     </div>
-                    <div className="relative group">
-                        <select
-                            className="appearance-none bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-2.5 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full sm:w-64 cursor-pointer"
-                            value={selectedProject}
-                            onChange={(e) => handleProjectChange(e.target.value)}
+
+                    {/* Reset Button */}
+                    {(startDate || endDate || filterStatus !== 'All' || selectedProject !== 'All Projects') && (
+                        <button
+                            onClick={() => {
+                                setSelectedProject('All Projects');
+                                setFilterStatus('All');
+                                setStartDate('');
+                                setEndDate('');
+                            }}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-500 text-[10px] font-bold uppercase px-4 py-2.5 rounded-xl transition-all"
                         >
-                            <option value="All Projects">All Projects</option>
-                            {summary.projectWise.map(p => (
-                                <option key={p.projectName} value={p.projectName}>{p.projectName}</option>
-                            ))}
-                        </select>
-                        <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus:rotate-180 transition" />
-                    </div>
+                            Reset
+                        </button>
+                    )}
                 </div>
 
                 {/* MAIN TABLE SECTION */}
@@ -229,11 +338,14 @@ const HODDashboard = () => {
                                                 </td>
                                                 <td className="px-6 py-4 font-black">{p.reworkCount}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter ${isCritical ? 'bg-red-100 text-red-600' :
-                                                        isHigh ? 'bg-orange-100 text-orange-600' :
-                                                            'bg-yellow-100 text-yellow-600'
+                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter 
+                                                        ${p.status === 'Approved' ? 'bg-green-100 text-green-600' :
+                                                            isCritical ? 'bg-red-100 text-red-600' :
+                                                                isHigh ? 'bg-orange-100 text-orange-600' :
+                                                                    'bg-yellow-100 text-yellow-600'
                                                         }`}>
-                                                        {isCritical ? 'CRITICAL' : isHigh ? 'HIGH' : 'MODERATE'}
+                                                        {p.status === 'Approved' ? 'COMPLETED' :
+                                                            isCritical ? 'CRITICAL' : isHigh ? 'HIGH' : 'MODERATE'}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -297,9 +409,11 @@ const HODDashboard = () => {
                                                         <th className="px-4 py-2 border-r border-gray-100">Checkpoint Question</th>
                                                         <th className="px-4 py-2 border-r border-gray-100">Location</th>
                                                         <th className="px-4 py-2 border-r border-gray-100">Engineer</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100">QE Name</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100">Date</th>
-                                                        <th className="px-4 py-2">QE Remark</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Name</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Opening Date</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Closing Date</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Remark</th>
+                                                        <th className="px-4 py-2 uppercase tracking-tighter">Rework Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
@@ -313,8 +427,23 @@ const HODDashboard = () => {
                                                             </td>
                                                             <td className="px-4 py-3 font-bold">{cp.seName}</td>
                                                             <td className="px-4 py-3">{cp.qeName || 'N/A'}</td>
-                                                            <td className="px-4 py-3 whitespace-nowrap">{cp.date}</td>
-                                                            <td className="px-4 py-3 italic text-red-500 font-medium">{cp.qeRemark || cp.observation}</td>
+                                                            <td className="px-4 py-3 whitespace-nowrap border-r border-gray-50">
+                                                                <div className="font-bold">{cp.openingDate}</div>
+                                                                <div className="text-[9px] opacity-60 font-medium">{cp.openingTime}</div>
+                                                            </td>
+                                                            <td className="px-4 py-3 whitespace-nowrap border-r border-gray-50">
+                                                                <div className={`font-bold ${cp.closingDate === '-' ? 'text-gray-300' : 'text-green-600'}`}>{cp.closingDate}</div>
+                                                                {cp.closingTime !== '-' && <div className="text-[9px] opacity-60 font-medium">{cp.closingTime}</div>}
+                                                            </td>
+                                                            <td className="px-4 py-3 italic text-red-500 font-medium border-r border-gray-50">{cp.qeRemark || cp.observation}</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                <span className={`text-[10px] font-black px-3 py-1 rounded shadow-sm border ${cp.status === 'Approved'
+                                                                    ? 'bg-green-50 text-green-600 border-green-200'
+                                                                    : 'bg-red-50 text-red-600 border-red-200'
+                                                                    }`}>
+                                                                    {cp.status === 'Approved' ? 'CLOSED' : 'OPEN'}
+                                                                </span>
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
