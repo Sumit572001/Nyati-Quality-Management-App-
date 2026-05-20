@@ -15,7 +15,41 @@ import {
     faCaretRight,
     faArrowLeft
 } from '@fortawesome/free-solid-svg-icons';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import BASE_URL from '../config';
+
+const graphData = {
+    Weekly: [
+        { name: 'Mon', reworks: 12 },
+        { name: 'Tue', reworks: 19 },
+        { name: 'Wed', reworks: 15 },
+        { name: 'Thu', reworks: 22 },
+        { name: 'Fri', reworks: 30 },
+        { name: 'Sat', reworks: 25 },
+        { name: 'Sun', reworks: 10 },
+    ],
+    Monthly: [
+        { name: 'Jan', reworks: 120 },
+        { name: 'Feb', reworks: 150 },
+        { name: 'Mar', reworks: 180 },
+        { name: 'Apr', reworks: 140 },
+        { name: 'May', reworks: 200 },
+        { name: 'Jun', reworks: 170 },
+        { name: 'Jul', reworks: 190 },
+        { name: 'Aug', reworks: 210 },
+        { name: 'Sep', reworks: 160 },
+        { name: 'Oct', reworks: 220 },
+        { name: 'Nov', reworks: 190 },
+        { name: 'Dec', reworks: 240 },
+    ],
+    Yearly: [
+        { name: '2021', reworks: 1200 },
+        { name: '2022', reworks: 1500 },
+        { name: '2023', reworks: 1800 },
+        { name: '2024', reworks: 2100 },
+        { name: '2025', reworks: 1900 },
+    ]
+};
 
 const HODDashboard = () => {
     const navigate = useNavigate();
@@ -29,6 +63,7 @@ const HODDashboard = () => {
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false); // New: Custom dropdown state
     const [loading, setLoading] = useState(true);
     const [expandedCategory, setExpandedCategory] = useState(null);
+    const [graphTimeframe, setGraphTimeframe] = useState('Monthly');
 
     // Auth Check
     useEffect(() => {
@@ -104,6 +139,8 @@ const HODDashboard = () => {
     useEffect(() => {
         if (selectedProject !== 'All Projects') {
             fetchProjectDetails(selectedProject);
+        } else {
+            setProjectDetails(null);
         }
     }, [selectedProject, fetchProjectDetails]);
 
@@ -121,15 +158,15 @@ const HODDashboard = () => {
         <div className="min-h-screen bg-gray-50 pb-12 font-sans text-gray-800">
             {/* STICKY HEADER */}
             <header className="sticky top-0 z-50 bg-[#004080] text-white shadow-md">
-                <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                <div className="max-w-full mx-auto px-8 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <img src="/logo.png" alt="Logo" className="h-10" />
-                        <h1 className="text-lg font-bold tracking-tight">HOD Dashboard</h1>
+                        <h1 className="text-xl font-bold tracking-tight">HOD Dashboard</h1>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:flex flex-col items-end">
                             <span className="text-xs opacity-75 font-medium">Logged in as</span>
-                            <span className="text-sm font-bold">{user.fullName}</span>
+                            <span className="text-base font-bold">{user.fullName}</span>
                         </div>
                         <button
                             onClick={handleLogout}
@@ -142,60 +179,124 @@ const HODDashboard = () => {
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-4 mt-6 space-y-6">
+            <main className="max-w-full mx-auto px-8 mt-8 space-y-8">
 
-                {/* STATS ROW */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* STATS & GRID ROW */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-                    {/* TOTAL REWORKS */}
-                    <div className="bg-red-100/50 p-5 rounded-2xl border border-red-200 flex items-center justify-between 
-    transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:scale-[1.02] cursor-pointer">
-                        <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Reworks</p>
-                            <h2 className="text-3xl font-black text-red-600 mt-1">{summary.totalReworks}</h2>
+                    {/* LEFT SIDEBAR: STATS CARDS */}
+                    <div className="lg:col-span-1 flex flex-col gap-4">
+                        {/* TOTAL REWORKS */}
+                        <div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex items-center justify-between 
+        transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Reworks</p>
+                                <h2 className="text-3xl font-black text-red-600 mt-1">{summary.totalReworks}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-600 text-xl shadow-sm border border-red-50">
+                                <FontAwesomeIcon icon={faExclamationTriangle} />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-red-200/50 rounded-xl flex items-center justify-center text-red-600 text-xl">
-                            <FontAwesomeIcon icon={faExclamationTriangle} />
+
+                        {/* PROJECTS AFFECTED */}
+                        <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-between 
+        transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Projects Affected</p>
+                                <h2 className="text-3xl font-black text-blue-700 mt-1">{projectsAffected}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-700 text-xl shadow-sm border border-blue-50">
+                                <FontAwesomeIcon icon={faBuilding} />
+                            </div>
+                        </div>
+
+                        {/* MOST CRITICAL */}
+                        <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 flex items-center justify-between 
+        transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Most Critical</p>
+                                <h2 className="text-xl font-black text-orange-600 mt-2 truncate">
+                                    {mostCritical}
+                                </h2>
+                            </div>
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-orange-600 text-xl shadow-sm border border-orange-50 shrink-0">
+                                <FontAwesomeIcon icon={faTrophy} />
+                            </div>
                         </div>
                     </div>
 
-                    {/* PROJECTS AFFECTED */}
-                    <div className="bg-blue-100/50 p-5 rounded-2xl border border-blue-200 flex items-center justify-between 
-    transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:scale-[1.02] cursor-pointer">
-                        <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Projects Affected</p>
-                            <h2 className="text-3xl font-black text-blue-700 mt-1">{projectsAffected}</h2>
+                    {/* RIGHT SIDE: REWORK TREND GRAPH */}
+                    <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-800">Rework Analysis</h3>
+                                <p className="text-xs text-gray-400 font-medium">Trend over {graphTimeframe.toLowerCase()}</p>
+                            </div>
+                            <div className="relative">
+                                <select
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 transition cursor-pointer"
+                                    value={graphTimeframe}
+                                    onChange={(e) => setGraphTimeframe(e.target.value)}
+                                >
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Yearly">Yearly</option>
+                                </select>
+                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]" />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-blue-200/50 rounded-xl flex items-center justify-center text-blue-700 text-xl">
-                            <FontAwesomeIcon icon={faBuilding} />
-                        </div>
-                    </div>
 
-                    {/* MOST CRITICAL */}
-                    <div className="bg-orange-100/50 p-5 rounded-2xl border border-orange-200 flex items-center justify-between 
-    transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:scale-[1.02] cursor-pointer">
-                        <div className="truncate pr-2">
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Most Critical</p>
-                            <h2 className="text-xl font-black text-orange-600 mt-2 truncate max-w-[180px]">
-                                {mostCritical}
-                            </h2>
-                        </div>
-                        <div className="w-12 h-12 bg-orange-200/50 rounded-xl flex items-center justify-center text-orange-600 text-xl">
-                            <FontAwesomeIcon icon={faTrophy} />
+                        <div className="flex-1 min-h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={graphData[graphTimeframe]}>
+                                    <defs>
+                                        <linearGradient id="colorRework" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                        dy={10}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                        itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="reworks"
+                                        stroke="#6366f1"
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill="url(#colorRework)"
+                                        animationDuration={1500}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 
                 </div>
 
                 {/* FILTER SECTION */}
-                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* 1. Project Filter */}
                         <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Project</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Project</label>
                             <div className="relative group">
                                 <select
-                                    className="appearance-none bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full cursor-pointer"
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full cursor-pointer"
                                     value={selectedProject}
                                     onChange={(e) => handleProjectChange(e.target.value)}
                                 >
@@ -204,16 +305,16 @@ const HODDashboard = () => {
                                         <option key={p.projectName} value={p.projectName}>{p.projectName}</option>
                                     ))}
                                 </select>
-                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]" />
+                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs" />
                             </div>
                         </div>
 
                         {/* 2. Custom Status Dropdown with Radios */}
                         <div className="relative">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Status Filter</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Status Filter</label>
                             <button
                                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                                className="flex items-center justify-between bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 w-full hover:border-[#004080] transition group shadow-sm"
+                                className="flex items-center justify-between bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 w-full hover:border-[#004080] transition group shadow-sm"
                             >
                                 <div className="flex items-center gap-2">
                                     <span className={`w-2 h-2 rounded-full ${filterStatus === 'All' ? 'bg-blue-500' : filterStatus === 'Open' ? 'bg-red-500' : 'bg-green-500'}`}></span>
@@ -240,11 +341,11 @@ const HODDashboard = () => {
                                             >
                                                 {/* Custom Radio Button UI */}
                                                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${filterStatus === s ? 'border-[#004080]' : 'border-gray-200'}`}>
-                                                    {filterStatus === s && <div className="w-2 h-2 rounded-full bg-[#004080]"></div>}
+                                                    {filterStatus === s && <div className="w-3 h-3 rounded-full bg-[#004080]"></div>}
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className={`w-2 h-2 rounded-full ${s === 'All' ? 'bg-blue-500' : s === 'Open' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                                                    <span className={`text-xs font-bold ${filterStatus === s ? 'text-[#004080]' : 'text-gray-600'}`}>
+                                                    <span className={`text-sm font-bold ${filterStatus === s ? 'text-[#004080]' : 'text-gray-600'}`}>
                                                         {s === 'All' ? 'All Reworks' : s === 'Open' ? 'Open Reworks' : 'Closed / Approved'}
                                                     </span>
                                                 </div>
@@ -257,10 +358,10 @@ const HODDashboard = () => {
 
                         {/* 3. From Date */}
                         <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">From Date</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">From Date</label>
                             <input
                                 type="date"
-                                className="bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
+                                className="bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
                             />
@@ -268,10 +369,10 @@ const HODDashboard = () => {
 
                         {/* 4. To Date */}
                         <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">To Date</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">To Date</label>
                             <input
                                 type="date"
-                                className="bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
+                                className="bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
                             />
@@ -297,17 +398,17 @@ const HODDashboard = () => {
                 {/* MAIN TABLE SECTION */}
                 {!projectDetails ? (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-4 border-b border-gray-50 flex items-center justify-between">
+                        <div className="p-6 border-b border-gray-50 flex items-center justify-between">
                             <h3 className="font-black text-gray-400 text-xs uppercase tracking-widest flex items-center gap-2">
                                 <FontAwesomeIcon icon={faChartBar} /> Projects
                             </h3>
-                            <button onClick={fetchSummary} className="text-primary text-xs font-bold hover:underline flex items-center gap-1">
+                            <button onClick={fetchSummary} className="text-primary text-sm font-bold hover:underline flex items-center gap-1">
                                 <FontAwesomeIcon icon={faSync} className={loading ? 'animate-spin' : ''} /> Refresh
                             </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase border-b border-gray-100">
+                                <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase border-b border-gray-100">
                                     <tr>
                                         <th className="px-6 py-3 w-16">Sr.No.</th>
                                         <th className="px-6 py-3">Project Name</th>
@@ -332,13 +433,13 @@ const HODDashboard = () => {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-sm text-[#004080] group-hover:underline">{p.projectName}</span>
-                                                        <span className="text-[10px] text-gray-400">{p.siteName}</span>
+                                                        <span className="font-bold text-base text-[#004080] group-hover:underline">{p.projectName}</span>
+                                                        <span className="text-xs text-gray-400">{p.siteName}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-black">{p.reworkCount}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter 
+                                                    <span className={`text-xs font-black px-3 py-1.5 rounded-full uppercase tracking-tighter 
                                                         ${p.status === 'Approved' ? 'bg-green-100 text-green-600' :
                                                             isCritical ? 'bg-red-100 text-red-600' :
                                                                 isHigh ? 'bg-orange-100 text-orange-600' :
@@ -362,7 +463,7 @@ const HODDashboard = () => {
                     </div>
                 ) : (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
                             <h2 className="font-black text-primary flex items-center gap-2">
                                 <FontAwesomeIcon icon={faCaretRight} className="text-accent" />
                                 Rework Breakdown: {selectedProject}
@@ -385,11 +486,11 @@ const HODDashboard = () => {
                                         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className="w-8 h-8 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center font-bold text-xs">{idx + 1}</span>
-                                            <span className="font-bold text-sm">{cat.category}</span>
+                                            <span className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center font-bold text-sm">{idx + 1}</span>
+                                            <span className="font-bold text-base">{cat.category}</span>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-2.5 py-1 rounded-full">{cat.reworkCount} REWORKS</span>
+                                            <span className="bg-gray-100 text-gray-500 text-xs font-black px-3 py-1.5 rounded-full">{cat.reworkCount} REWORKS</span>
                                             <div className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-100 group-hover:bg-gray-200 transition-colors">
                                                 <FontAwesomeIcon
                                                     icon={faChevronDown}
@@ -402,7 +503,7 @@ const HODDashboard = () => {
 
                                     {expandedCategory === cat.category && (
                                         <div className="border-t border-gray-50 overflow-x-auto transition-all duration-300">
-                                            <table className="w-full text-[11px]">
+                                            <table className="w-full text-xs">
                                                 <thead className="bg-gray-50 shadow-inner">
                                                     <tr className="text-gray-400 font-bold uppercase tracking-tighter">
                                                         <th className="px-4 py-2 border-r border-gray-100 italic">#</th>
