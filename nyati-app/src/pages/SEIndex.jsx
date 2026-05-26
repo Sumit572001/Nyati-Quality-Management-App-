@@ -739,7 +739,7 @@ function SEIndex() {
                                       }}
                                       className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
                                         ? 'bg-[#004080] text-white border-[#004080] shadow-md'
-                                        : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
+                                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                                         }`}
                                     >
                                       <span>{stage}</span>
@@ -789,7 +789,7 @@ function SEIndex() {
                     .map(([stageName, items], si) => (
                       <div key={si} className="space-y-4">
                         {stageName !== 'General' && (
-                          <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2 italic">
+                          <h4 className="text-[10px] font-black text-gray-700 uppercase tracking-widest border-b border-gray-300 pb-1 mb-2 italic">
                             Stage: {stageName}
                           </h4>
                         )}
