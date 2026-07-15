@@ -18,39 +18,6 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import BASE_URL from '../config';
 
-const graphData = {
-    Weekly: [
-        { name: 'Mon', reworks: 12 },
-        { name: 'Tue', reworks: 19 },
-        { name: 'Wed', reworks: 15 },
-        { name: 'Thu', reworks: 22 },
-        { name: 'Fri', reworks: 30 },
-        { name: 'Sat', reworks: 25 },
-        { name: 'Sun', reworks: 10 },
-    ],
-    Monthly: [
-        { name: 'Jan', reworks: 120 },
-        { name: 'Feb', reworks: 150 },
-        { name: 'Mar', reworks: 180 },
-        { name: 'Apr', reworks: 140 },
-        { name: 'May', reworks: 200 },
-        { name: 'Jun', reworks: 170 },
-        { name: 'Jul', reworks: 190 },
-        { name: 'Aug', reworks: 210 },
-        { name: 'Sep', reworks: 160 },
-        { name: 'Oct', reworks: 220 },
-        { name: 'Nov', reworks: 190 },
-        { name: 'Dec', reworks: 240 },
-    ],
-    Yearly: [
-        { name: '2021', reworks: 1200 },
-        { name: '2022', reworks: 1500 },
-        { name: '2023', reworks: 1800 },
-        { name: '2024', reworks: 2100 },
-        { name: '2025', reworks: 1900 },
-    ]
-};
-
 const HODDashboard = () => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
@@ -64,6 +31,103 @@ const HODDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [expandedCategory, setExpandedCategory] = useState(null);
     const [graphTimeframe, setGraphTimeframe] = useState('Monthly');
+    const [zoomImage, setZoomImage] = useState(null);
+
+    const getImageUrl = (p) => p && (p.startsWith('http') ? p : `${BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`);
+
+    const dynamicGraphData = React.useMemo(() => {
+        const reworksList = (summary.reworks || []).filter(report => {
+            if (selectedProject === 'All Projects') return true;
+            return report.projectName === selectedProject;
+        });
+
+        // 1. Weekly Data (Mon - Sun)
+        const weeklyCounts = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        // 2. Monthly Data (Jan - Dec)
+        const monthlyCounts = {
+            Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
+            Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0
+        };
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        // 3. Yearly Data (last 5 years dynamically based on current year)
+        const currentYear = new Date().getFullYear();
+        const yearlyCounts = {};
+        for (let i = 4; i >= 0; i--) {
+            yearlyCounts[currentYear - i] = 0;
+        }
+
+        // Loop through all rework reports and their items
+        reworksList.forEach(report => {
+            if (!report.date) return;
+            const parts = report.date.split('/');
+            if (parts.length !== 3) return;
+            const d = new Date(parts[2], parts[1] - 1, parts[0]);
+            if (isNaN(d.getTime())) return;
+
+            // Count the failed items
+            let failedItemsInReport = 0;
+            if (report.items && Array.isArray(report.items)) {
+                report.items.forEach(item => {
+                    const isReworkItem = item.qeDecision === 'fail' || item.qeDecision === 'reject' || (item.observation && item.observation.trim() !== '');
+                    if (isReworkItem) {
+                        failedItemsInReport++;
+                    }
+                });
+            }
+
+            if (failedItemsInReport === 0) return;
+
+            // Accumulate day of week
+            const dayName = dayNames[d.getDay()];
+            if (dayName === 'Sun') weeklyCounts.Sun += failedItemsInReport;
+            else if (dayName === 'Mon') weeklyCounts.Mon += failedItemsInReport;
+            else if (dayName === 'Tue') weeklyCounts.Tue += failedItemsInReport;
+            else if (dayName === 'Wed') weeklyCounts.Wed += failedItemsInReport;
+            else if (dayName === 'Thu') weeklyCounts.Thu += failedItemsInReport;
+            else if (dayName === 'Fri') weeklyCounts.Fri += failedItemsInReport;
+            else if (dayName === 'Sat') weeklyCounts.Sat += failedItemsInReport;
+
+            // Accumulate month
+            const monthName = monthNames[d.getMonth()];
+            monthlyCounts[monthName] += failedItemsInReport;
+
+            // Accumulate year
+            const year = d.getFullYear();
+            if (yearlyCounts[year] !== undefined) {
+                yearlyCounts[year] += failedItemsInReport;
+            }
+        });
+
+        // Format to Recharts structure [{ name: 'Mon', reworks: X }]
+        const weeklyData = [
+            { name: 'Mon', reworks: weeklyCounts.Mon },
+            { name: 'Tue', reworks: weeklyCounts.Tue },
+            { name: 'Wed', reworks: weeklyCounts.Wed },
+            { name: 'Thu', reworks: weeklyCounts.Thu },
+            { name: 'Fri', reworks: weeklyCounts.Fri },
+            { name: 'Sat', reworks: weeklyCounts.Sat },
+            { name: 'Sun', reworks: weeklyCounts.Sun },
+        ];
+
+        const monthlyData = monthNames.map(m => ({
+            name: m,
+            reworks: monthlyCounts[m]
+        }));
+
+        const yearlyData = Object.keys(yearlyCounts).map(y => ({
+            name: y,
+            reworks: yearlyCounts[y]
+        }));
+
+        return {
+            Weekly: weeklyData,
+            Monthly: monthlyData,
+            Yearly: yearlyData
+        };
+    }, [summary.reworks, selectedProject]);
 
     // Auth Check
     useEffect(() => {
@@ -248,7 +312,7 @@ const HODDashboard = () => {
 
                         <div className="flex-1 min-h-[300px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={graphData[graphTimeframe]}>
+                                <AreaChart data={dynamicGraphData[graphTimeframe]}>
                                     <defs>
                                         <linearGradient id="colorRework" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -514,7 +578,9 @@ const HODDashboard = () => {
                                                         <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Opening Date</th>
                                                         <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Closing Date</th>
                                                         <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Remark</th>
-                                                        <th className="px-4 py-2 uppercase tracking-tighter">Rework Status</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Rework Status</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Evidence</th>
+                                                        <th className="px-4 py-2 uppercase tracking-tighter">SE Rework Photo</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
@@ -537,13 +603,49 @@ const HODDashboard = () => {
                                                                 {cp.closingTime !== '-' && <div className="text-[9px] opacity-60 font-medium">{cp.closingTime}</div>}
                                                             </td>
                                                             <td className="px-4 py-3 italic text-red-500 font-medium border-r border-gray-50">{cp.qeRemark || cp.observation}</td>
-                                                            <td className="px-4 py-3 text-center">
+                                                            <td className="px-4 py-3 text-center border-r border-gray-50">
                                                                 <span className={`text-[10px] font-black px-3 py-1 rounded shadow-sm border ${cp.status === 'Approved'
                                                                     ? 'bg-green-50 text-green-600 border-green-200'
                                                                     : 'bg-red-50 text-red-600 border-red-200'
                                                                     }`}>
                                                                     {cp.status === 'Approved' ? 'CLOSED' : 'OPEN'}
                                                                 </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 border-r border-gray-50">
+                                                                <div className="flex gap-1.5 overflow-x-auto max-w-[120px] py-0.5">
+                                                                    {cp.qeMediaUrls && cp.qeMediaUrls.length > 0 ? (
+                                                                        cp.qeMediaUrls.map((img, idx) => (
+                                                                            <img
+                                                                                key={idx}
+                                                                                src={getImageUrl(img)}
+                                                                                className="w-10 h-10 object-cover rounded border border-gray-200 cursor-pointer hover:scale-110 transition-transform"
+                                                                                onClick={() => setZoomImage(getImageUrl(img))}
+                                                                                alt="QE Evidence"
+                                                                                onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                            />
+                                                                        ))
+                                                                    ) : (
+                                                                        <span className="text-gray-400 text-[10px] italic">No Photos</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex gap-1.5 overflow-x-auto max-w-[120px] py-0.5">
+                                                                    {cp.seMediaUrls && cp.seMediaUrls.length > 0 ? (
+                                                                        cp.seMediaUrls.map((img, idx) => (
+                                                                            <img
+                                                                                key={idx}
+                                                                                src={getImageUrl(img)}
+                                                                                className="w-10 h-10 object-cover rounded border border-gray-200 cursor-pointer hover:scale-110 transition-transform"
+                                                                                onClick={() => setZoomImage(getImageUrl(img))}
+                                                                                alt="SE Rework"
+                                                                                onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                            />
+                                                                        ))
+                                                                    ) : (
+                                                                        <span className="text-gray-400 text-[10px] italic">No Photos</span>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -557,6 +659,21 @@ const HODDashboard = () => {
                     </div>
                 )}
             </main>
+
+            {/* --- IMAGE ZOOM MODAL --- */}
+            {zoomImage && (
+                <div
+                    className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center cursor-zoom-out"
+                    onClick={() => setZoomImage(null)}
+                >
+                    <span className="absolute top-4 right-5 text-white text-3xl font-bold cursor-pointer">&times;</span>
+                    <img
+                        src={zoomImage}
+                        className="max-w-[95%] max-h-[85vh] rounded-xl border-4 border-white/10 shadow-2xl object-contain animate-in zoom-in duration-200"
+                        alt="Zoomed View"
+                    />
+                </div>
+            )}
 
             {loading && (
                 <div className="fixed inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-[9999]">
