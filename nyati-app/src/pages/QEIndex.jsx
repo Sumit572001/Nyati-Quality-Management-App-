@@ -17,6 +17,7 @@ function QEIndex() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [zoomImage, setZoomImage] = useState(null)
 
   const [view, setView] = useState('dashboard') // 'dashboard', 'main', 'reworks', 'rework-detail'
   const [reworkFilter, setReworkFilter] = useState('approval') // 'approval' or 'waiting'
@@ -29,6 +30,7 @@ function QEIndex() {
   const [reworkApprovals, setReworkApprovals] = useState([])
   const [returnedReports, setReturnedReports] = useState([])
   const [selectedRework, setSelectedRework] = useState(null)
+  const [selectedReworkItemIdx, setSelectedReworkItemIdx] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
   const [filterType, setFilterType] = useState('all') // 'all', 'today', 'pending'
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -121,11 +123,61 @@ function QEIndex() {
     }
   }
 
+  const getReworksForApproval = () => {
+    const list = [];
+    const allReports = [...reworkApprovals, ...returnedReports];
+    const uniqueReports = Array.from(new Map(allReports.map(r => [r._id, r])).values());
+
+    uniqueReports.forEach(report => {
+      if (report.items && Array.isArray(report.items)) {
+        report.items.forEach((item, idx) => {
+          const isFailed = item.qeDecision === 'fail' || item.qeDecision === 'reject';
+          const hasReworkSubmitted = !!item.reworkRemark || (item.reworkMediaUrls && item.reworkMediaUrls.length > 0);
+          if (isFailed && hasReworkSubmitted) {
+            list.push({
+              report,
+              item,
+              itemIndex: idx
+            });
+          }
+        });
+      }
+    });
+    return list;
+  };
+
+  const getWaitingForSEAction = () => {
+    const list = [];
+    const allReports = [...reworkApprovals, ...returnedReports];
+    const uniqueReports = Array.from(new Map(allReports.map(r => [r._id, r])).values());
+
+    uniqueReports.forEach(report => {
+      if (report.items && Array.isArray(report.items)) {
+        report.items.forEach((item, idx) => {
+          const isFailed = item.qeDecision === 'fail' || item.qeDecision === 'reject';
+          const hasReworkSubmitted = !!item.reworkRemark || (item.reworkMediaUrls && item.reworkMediaUrls.length > 0);
+          if (isFailed && !hasReworkSubmitted) {
+            list.push({
+              report,
+              item,
+              itemIndex: idx
+            });
+          }
+        });
+      }
+    });
+    return list;
+  };
+
   const fetchReworkApprovals = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${BASE_URL}/api/qe/rework-approvals`);
-      setReworkApprovals(Array.isArray(res.data) ? res.data : []);
+      const [resRework, resReturned] = await Promise.all([
+        axios.get(`${BASE_URL}/api/qe/rework-approvals`),
+        axios.get(`${BASE_URL}/api/qe/returned-reports`)
+      ]);
+      setReworkApprovals(Array.isArray(resRework.data) ? resRework.data : []);
+      setReturnedReports(Array.isArray(resReturned.data) ? resReturned.data : []);
       setView('reworks');
       setIsSidebarOpen(false);
     } catch (err) {
@@ -141,6 +193,7 @@ function QEIndex() {
       const res = await axios.post(`${BASE_URL}/api/qe/rework-final-status`, {
         reportId: selectedRework._id,
         status: status,
+        itemIndex: selectedReworkItemIdx,
         updatedAt: new Date().toLocaleString('en-GB', { hour12: true })
       });
       if (res.data.success) {
@@ -276,6 +329,9 @@ function QEIndex() {
     );
   }
 
+  const reworksForApproval = getReworksForApproval();
+  const waitingForSEAction = getWaitingForSEAction();
+
   return (
     <div className="max-w-[500px] mx-auto min-h-screen bg-white border-x border-gray-200 pb-24 font-sans relative shadow-xl overflow-x-hidden">
 
@@ -345,9 +401,9 @@ function QEIndex() {
                   <FontAwesomeIcon icon={faHistory} />
                   <span>Reworks for Approval</span>
                 </div>
-                {reworkApprovals.length > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{reworkApprovals.length}</span>}
+                {reworksForApproval.length > 0 && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{reworksForApproval.length}</span>}
               </button>
-              <button onClick={handleLogout} className="w-full text-left p-2 hover:bg-red-500 rounded-md transition-colors flex items-center gap-3 mt-10 text-red-200"><FontAwesomeIcon icon={faSignOutAlt} /> Sign Out</button>
+              <button onClick={handleLogout} className="w-full text-left p-2 hover:bg-red-50 rounded-md transition-colors flex items-center gap-3 mt-10 text-red-200"><FontAwesomeIcon icon={faSignOutAlt} /> Sign Out</button>
             </nav>
           </div>
         </div>
@@ -357,7 +413,7 @@ function QEIndex() {
       <div className="flex justify-between items-center p-4 border-b border-gray-100 sticky top-0 bg-white z-40">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-[#004080] hover:bg-gray-100 rounded-md relative">
           <FontAwesomeIcon icon={faBars} className="text-2xl" />
-          {reworkApprovals.length > 0 && (
+          {reworksForApproval.length > 0 && (
             <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping border-2 border-white"></span>
           )}
         </button>
@@ -402,7 +458,7 @@ function QEIndex() {
               <FontAwesomeIcon icon={faHistory} size="xl" />
             </div>
             <div>
-              <p className="text-2xl font-black text-gray-900 leading-none">{returnedReports.length}</p>
+              <p className="text-2xl font-black text-gray-900 leading-none">{waitingForSEAction.length}</p>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Waiting for Decision (Reworks)</p>
               <p className="text-[9px] font-bold text-violet-400 uppercase mt-1">Pending with Site Engineer</p>
             </div>
@@ -450,8 +506,8 @@ function QEIndex() {
                                   <p className="text-[12px] font-bold text-gray-800 leading-tight">{item.originalIdx + 1}. {item.question}</p>
                                   {item.seDecision ? (
                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ${item.seDecision === 'yes' ? 'bg-green-100 text-green-700 border border-green-200' :
-                                        item.seDecision === 'no' ? 'bg-red-100 text-red-700 border border-red-200' :
-                                          'bg-orange-100 text-orange-700 border border-orange-200'
+                                      item.seDecision === 'no' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                        'bg-orange-100 text-orange-700 border border-orange-200'
                                       }`}>
                                       {item.seDecision === 'yes' ? 'Yes' : item.seDecision === 'no' ? 'No' : 'N/A'}
                                     </span>
@@ -464,7 +520,7 @@ function QEIndex() {
                                         key={photoIdx}
                                         src={getImageUrl(img)}
                                         className="w-12 h-12 object-cover rounded-md border shadow-sm cursor-pointer"
-                                        onClick={() => window.open(getImageUrl(img), '_blank')}
+                                        onClick={() => setZoomImage(getImageUrl(img))}
                                         alt="report"
                                         onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
                                       />
@@ -540,10 +596,10 @@ function QEIndex() {
           <h2 className="text-sm font-black text-[#004080] uppercase mb-4 tracking-widest pl-2 border-l-4 border-[#004080]">
             {reworkFilter === 'approval' ? "Reworks for Approval" : "Waiting for SE Action"}
           </h2>
-          {(reworkFilter === 'approval' ? reworkApprovals : returnedReports).length > 0 ? (
+          {(reworkFilter === 'approval' ? reworksForApproval : waitingForSEAction).length > 0 ? (
             <div className="space-y-4">
-              {(reworkFilter === 'approval' ? reworkApprovals : returnedReports).map((report, idx) => (
-                <div key={idx} onClick={() => { setSelectedRework(report); setView('rework-detail'); }} className={`bg-white border rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer ${reworkFilter === 'waiting' ? 'border-l-4 border-l-orange-400' : 'border-gray-200'}`}>
+              {(reworkFilter === 'approval' ? reworksForApproval : waitingForSEAction).map(({ report, item, itemIndex }, idx) => (
+                <div key={idx} onClick={() => { setSelectedRework(report); setSelectedReworkItemIdx(itemIndex); setView('rework-detail'); }} className={`bg-white border rounded-xl shadow-sm p-4 hover:border-[#004080] transition-colors cursor-pointer ${reworkFilter === 'waiting' ? 'border-l-4 border-l-orange-400' : 'border-gray-200'}`}>
                   <div className="flex justify-between items-start mb-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${reworkFilter === 'approval' ? 'bg-blue-100 text-[#004080]' : 'bg-orange-50 text-orange-600'}`}>
                       {[report.block, report.floor, report.unitType].filter(Boolean).join(' | ')}
@@ -552,7 +608,7 @@ function QEIndex() {
                   </div>
                   <p className="text-xs font-bold text-gray-800">{report.projectName}</p>
                   <p className="text-[10px] text-gray-500 mt-1">
-                    {reworkFilter === 'approval' ? `Item: ${report.itemName || "Checklist Item"}` : `Observations: ${report.items?.filter(i => i.qeDecision === 'fail').length} issues`}
+                    Item: {item.question}
                   </p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className={`text-[10px] font-bold italic ${reworkFilter === 'approval' ? 'text-green-600' : 'text-orange-500'}`}>
@@ -586,114 +642,116 @@ function QEIndex() {
           </div>
 
           <div className="space-y-10 px-2">
-            {selectedRework?.items?.filter(i => i.qeDecision === 'fail').map((item, itemIdx) => (
-              <div key={itemIdx} className="space-y-6">
+            {(() => {
+              const item = selectedRework?.items?.[selectedReworkItemIdx];
+              if (!item) return null;
+              return (
+                <div className="space-y-6">
 
-                <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
-                  <p className="text-[10px] font-black text-gray-500 uppercase">{item.category}</p>
-                  <p className="text-xs font-bold text-gray-800">{item.question}</p>
-                </div>
-
-                <div className="flex flex-col items-start max-w-[90%]">
-                  <div className="flex items-center gap-2 mb-1.5 ml-1">
-                    <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
-                      <FontAwesomeIcon icon={faUserShield} className="text-red-600 text-xs" />
-                    </div>
-                    <span className="text-[11px] font-black text-gray-500 uppercase">Quality Engineer (Initial)</span>
+                  <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase">{item.category}</p>
+                    <p className="text-xs font-bold text-gray-800">{item.question}</p>
                   </div>
-                  <div className="bg-red-50 border border-red-100 rounded-3xl rounded-tl-none p-4 shadow-sm w-full">
-                    <p className="text-[10px] font-black text-red-600 uppercase mb-1 flex items-center gap-1.5">
-                      <FontAwesomeIcon icon={faInfoCircle} /> Issue Observed:
-                    </p>
 
-                    <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
-                      {item.observation || 'No observation provided'}
-                    </p>
-
-                    {item.mediaUrls && item.mediaUrls.length > 0 && (
-                      <div className="flex flex-wrap gap-2.5 mb-3">
-                        {item.mediaUrls.map((img, idx) => (
-                          <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-red-100">
-                            <img
-                              src={getImageUrl(img)}
-                              className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
-                              onClick={() => window.open(getImageUrl(img), '_blank')}
-                              alt="QE Evidence"
-                              onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
-                            />
-                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <FontAwesomeIcon icon={faSearchPlus} className="text-white" />
-                            </div>
-                          </div>
-                        ))}
+                  <div className="flex flex-col items-start max-w-[90%]">
+                    <div className="flex items-center gap-2 mb-1.5 ml-1">
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center border border-red-200">
+                        <FontAwesomeIcon icon={faUserShield} className="text-red-600 text-xs" />
                       </div>
-                    )}
-
-                    <div className="flex items-center gap-1 mt-2 text-gray-500 bg-white/50 p-1.5 rounded-lg border border-red-100">
-                      <FontAwesomeIcon icon={faEdit} className="text-[10px]" />
-                      <p className="text-[10px] font-medium leading-tight">
-                        Remark: {item.qeRemark || 'No remark provided.'}
+                      <span className="text-[11px] font-black text-gray-500 uppercase">Quality Engineer (Initial)</span>
+                    </div>
+                    <div className="bg-red-50 border border-red-100 rounded-3xl rounded-tl-none p-4 shadow-sm w-full">
+                      <p className="text-[10px] font-black text-red-600 uppercase mb-1 flex items-center gap-1.5">
+                        <FontAwesomeIcon icon={faInfoCircle} /> Issue Observed:
                       </p>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="flex flex-col items-end ml-auto max-w-[90%]">
-                  <div className="flex items-center gap-2 mb-1.5 mr-1">
-                    <span className="text-[11px] font-black text-gray-500 uppercase">Site Engineer (Action)</span>
-                    <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
-                      <FontAwesomeIcon icon={faUserGear} className="text-green-600 text-xs" />
-                    </div>
-                  </div>
-                  <div className="bg-green-50 border border-green-100 rounded-3xl rounded-tr-none p-4 shadow-sm w-full">
-                    <p className="text-[10px] font-black text-green-600 uppercase mb-1">Work Completion Report:</p>
+                      <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
+                        {item.observation || 'No observation provided'}
+                      </p>
 
-                    {item.reworkRemark ? (
-                      <>
-                        <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
-                          {item.reworkRemark}
-                        </p>
-
-                        {item.reworkMediaUrls && item.reworkMediaUrls.length > 0 && (
-                          <div className="flex flex-wrap gap-2.5 mb-2">
-                            {item.reworkMediaUrls.map((img, idx) => (
-                              <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-green-100">
-                                <img
-                                  src={getImageUrl(img)}
-                                  className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
-                                  onClick={() => window.open(getImageUrl(img), '_blank')}
-                                  alt="SE Rework"
-                                  onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
-                                />
-                                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <FontAwesomeIcon icon={faSearchPlus} className="text-white" />
-                                </div>
+                      {item.mediaUrls && item.mediaUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2.5 mb-3">
+                          {item.mediaUrls.map((img, idx) => (
+                            <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-red-100 cursor-pointer" onClick={() => setZoomImage(getImageUrl(img))}>
+                              <img
+                                src={getImageUrl(img)}
+                                className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
+                                alt="QE Evidence"
+                                onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <FontAwesomeIcon icon={faSearchPlus} className="text-white" />
                               </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="flex justify-between items-center mt-3 pt-2 border-t border-green-100">
-                          <span className="text-[9px] text-gray-500 font-black uppercase tracking-tighter">
-                            <FontAwesomeIcon icon={faCalendarAlt} className="mr-1" /> Submitted
-                          </span>
-                          <span className="text-[9px] font-bold text-green-700 bg-white px-2 py-0.5 rounded-full border border-green-100">
-                            Ready for Review ✅
-                          </span>
+                            </div>
+                          ))}
                         </div>
-                      </>
-                    ) : (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
-                        <p className="text-[10px] text-yellow-700 font-bold">
-                          ⏳ SE ne abhi rework submit nahi kiya hai
+                      )}
+
+                      <div className="flex items-center gap-1 mt-2 text-gray-500 bg-white/50 p-1.5 rounded-lg border border-red-100">
+                        <FontAwesomeIcon icon={faEdit} className="text-[10px]" />
+                        <p className="text-[10px] font-medium leading-tight">
+                          Remark: {item.qeRemark || 'No remark provided.'}
                         </p>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-              </div>
-            ))}
+                  <div className="flex flex-col items-end ml-auto max-w-[90%]">
+                    <div className="flex items-center gap-2 mb-1.5 mr-1">
+                      <span className="text-[11px] font-black text-gray-500 uppercase">Site Engineer (Action)</span>
+                      <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center border border-green-200">
+                        <FontAwesomeIcon icon={faUserGear} className="text-green-600 text-xs" />
+                      </div>
+                    </div>
+                    <div className="bg-green-50 border border-green-100 rounded-3xl rounded-tr-none p-4 shadow-sm w-full">
+                      <p className="text-[10px] font-black text-green-600 uppercase mb-1">Work Completion Report:</p>
+
+                      {item.reworkRemark ? (
+                        <>
+                          <p className="text-xs font-black text-gray-900 mb-3 bg-white/50 p-2 rounded-lg">
+                            {item.reworkRemark}
+                          </p>
+
+                          {item.reworkMediaUrls && item.reworkMediaUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2.5 mb-2">
+                              {item.reworkMediaUrls.map((img, idx) => (
+                                <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-green-100 cursor-pointer" onClick={() => setZoomImage(getImageUrl(img))}>
+                                  <img
+                                    src={getImageUrl(img)}
+                                    className="w-24 h-24 object-cover transition-transform group-hover:scale-105"
+                                    alt="SE Rework"
+                                    onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=Error"; }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <FontAwesomeIcon icon={faSearchPlus} className="text-white" />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center mt-3 pt-2 border-t border-green-100">
+                            <span className="text-[9px] text-gray-500 font-black uppercase tracking-tighter">
+                              <FontAwesomeIcon icon={faCalendarAlt} className="mr-1" /> Submitted
+                            </span>
+                            <span className="text-[9px] font-bold text-green-700 bg-white px-2 py-0.5 rounded-full border border-green-100">
+                              Ready for Review ✅
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+                          <p className="text-[10px] text-yellow-700 font-bold">
+                            ⏳ SE ne abhi rework submit nahi kiya hai
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              );
+            })()}
           </div>
 
           <button
@@ -727,6 +785,21 @@ function QEIndex() {
               <FontAwesomeIcon icon={faCheckCircle} /> Pass Rework
             </button>
           </div>
+        </div>
+      )}
+
+      {/* --- IMAGE ZOOM MODAL --- */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center cursor-zoom-out"
+          onClick={() => setZoomImage(null)}
+        >
+          <span className="absolute top-4 right-5 text-white text-3xl font-bold cursor-pointer">&times;</span>
+          <img
+            src={zoomImage}
+            className="max-w-[95%] max-h-[85vh] rounded-xl border-4 border-white/10 shadow-2xl object-contain animate-in zoom-in duration-200"
+            alt="Zoomed View"
+          />
         </div>
       )}
 

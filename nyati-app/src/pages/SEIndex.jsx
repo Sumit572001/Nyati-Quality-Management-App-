@@ -205,6 +205,7 @@ function SEIndex() {
   const [selectedRework, setSelectedRework] = useState(null);
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
+  const [zoomImage, setZoomImage] = useState(null);
   const [itemSelection, setItemSelection] = useState({}); // Tracking individual item selection: 'yes', 'no', 'na' or undefined
   const [todayReports, setTodayReports] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
@@ -919,7 +920,7 @@ function SEIndex() {
                         <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-2">Evidence from QE</p>
                         <div className="flex flex-wrap gap-2">
                           {selectedRework.mediaUrls.map((p, i) => (
-                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:scale-105 transition-transform" onClick={() => window.open(getImageUrl(p), '_blank')}>
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-md cursor-pointer hover:scale-105 transition-transform" onClick={() => setZoomImage(getImageUrl(p))}>
                               <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="qe evidence" onError={(e) => e.target.src = "https://via.placeholder.com/100?text=Error"} />
                             </div>
                           ))}
@@ -956,9 +957,9 @@ function SEIndex() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {reworkPhotos.map((p, i) => (
-                      <div key={i} className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-xl group">
+                      <div key={i} className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-xl group cursor-pointer" onClick={() => setZoomImage(p.url)}>
                         <img src={p.url} className="w-full h-full object-cover" />
-                        <button onClick={() => setReworkPhotos(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-600/90 text-white w-7 h-7 rounded-xl flex items-center justify-center text-[10px] shadow-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); setReworkPhotos(prev => prev.filter((_, idx) => idx !== i)); }} className="absolute top-1 right-1 bg-red-600/90 text-white w-7 h-7 rounded-xl flex items-center justify-center text-[10px] shadow-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                           <FontAwesomeIcon icon={faTimes} />
                         </button>
                       </div>
@@ -1278,6 +1279,21 @@ function SEIndex() {
 
       {/* FOOTER STATS INFO */}
       <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-100 max-w-md mx-auto"><div className="h-full bg-[#004080] transition-all duration-1000" style={{ width: `${dashboardStats.compliance}%` }}></div></div>
+
+      {/* --- IMAGE ZOOM MODAL --- */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9999] flex items-center justify-center cursor-zoom-out"
+          onClick={() => setZoomImage(null)}
+        >
+          <span className="absolute top-4 right-5 text-white text-3xl font-bold cursor-pointer">&times;</span>
+          <img
+            src={zoomImage}
+            className="max-w-[95%] max-h-[85vh] rounded-xl border-4 border-white/10 shadow-2xl object-contain animate-in zoom-in duration-200"
+            alt="Zoomed View"
+          />
+        </div>
+      )}
 
       {loading && (
         <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
