@@ -5,7 +5,7 @@ import {
   faChevronDown, faChevronUp, faCheckCircle, faArrowLeft, faCheckSquare, faSquare,
   faBars, faTimes, faSignOutAlt, faUserCircle, faHistory, faHome, faInfoCircle, faUserTie, faCalendarAlt,
   faCamera, faUpload, faTrash, faExclamationTriangle, faPlus, faChartLine, faListAlt, faTrophy, faCheck,
-  faClock, faImage
+  faClock, faImage, faSearch
 } from '@fortawesome/free-solid-svg-icons'
 
 import BASE_URL from '../config'
@@ -53,15 +53,15 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
 
   return (
     <div className="space-y-1 relative" ref={containerRef}>
-      <label className="text-[9px] font-bold text-gray-400 uppercase ml-1">{label}</label>
+      <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">{label}</label>
       <div
         onClick={() => { setIsOpen(!isOpen); if (!isOpen) setSearchTerm(''); }}
-        className={`w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-sm transition-all duration-200 flex justify-between items-center cursor-pointer shadow-sm ${isOpen ? 'border-[#004080] ring-2 ring-blue-50' : 'hover:border-gray-300'}`}
+        className={`w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-base transition-all duration-200 flex justify-between items-center cursor-pointer shadow-sm ${isOpen ? 'border-[#004080] ring-2 ring-blue-50' : 'hover:border-gray-300'}`}
       >
         <span className={`truncate ${value ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
           {value || placeholder}
         </span>
-        <FontAwesomeIcon icon={isOpen ? faChevronUp : faChevronDown} className={`text-xs transition-transform duration-200 ${isOpen ? 'text-[#004080]' : 'text-gray-400'}`} />
+        <FontAwesomeIcon icon={isOpen ? faChevronUp : faChevronDown} className={`text-sm transition-transform duration-200 ${isOpen ? 'text-[#004080]' : 'text-gray-400'}`} />
       </div>
 
       {isOpen && (
@@ -69,8 +69,7 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
           <div className="p-2 border-b border-gray-100 bg-gray-50/50">
             <input
               type="text"
-              autoFocus
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-[#004080] focus:ring-1 focus:ring-blue-50 transition-all font-medium"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-[#004080] focus:ring-1 focus:ring-blue-50 transition-all font-medium"
               placeholder={`Search ${label}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -83,13 +82,13 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
                 <div
                   key={i}
                   onClick={() => { onChange(opt); setIsOpen(false); setSearchTerm(''); }}
-                  className={`px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer border-l-4 ${opt === value ? 'bg-blue-50 text-[#004080] border-[#004080]' : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900'}`}
+                  className={`px-4 py-2.5 text-sm font-bold transition-colors cursor-pointer border-l-4 ${opt === value ? 'bg-blue-50' : ''}`}
                 >
                   {opt}
                 </div>
               ))
             ) : (
-              <div className="px-4 py-8 text-[10px] text-gray-400 text-center uppercase font-black tracking-widest bg-gray-50/20">No results found</div>
+              <div className="px-4 py-8 text-[11px] text-gray-400 text-center uppercase font-black tracking-widest bg-gray-50/20">No results found</div>
             )}
           </div>
         </div>
@@ -194,6 +193,8 @@ function SEIndex() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState('dashboard')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [inspectionStep, setInspectionStep] = useState(1)
+  const [categorySearchTerm, setCategorySearchTerm] = useState('')
   const [reworkReports, setReworkReports] = useState([])
   const [pendingReports, setPendingReports] = useState([])
   const [historyReports, setHistoryReports] = useState([])
@@ -334,13 +335,45 @@ function SEIndex() {
   const toggleCategory = (cat) => {
     const isSelected = selectedCats.find(c => c.name === cat.name);
     if (isSelected) {
-      setSelectedCats(prev => prev.filter(c => c.name !== cat.name));
-      const updatedStages = { ...categoryStages };
-      delete updatedStages[cat.name];
-      setCategoryStages(updatedStages);
+      setSelectedCats([]);
+      setCategoryStages({});
     } else {
-      setSelectedCats(prev => [...prev, cat]);
-      // Default to '' (All) if not set
+      setSelectedCats([cat]);
+      setCategoryStages({});
+    }
+  }
+
+  const selectStageAndProceed = async (cat, stage) => {
+    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) {
+      return alert("Pehle building info bhariye!");
+    }
+
+    // Optimistically set selections in case checklist view needs them
+    setSelectedCats([cat]);
+    setCategoryStages({ [cat.name]: stage });
+
+    try {
+      setLoading(true);
+      const res = await axios.get(`${BASE_URL}/api/passed-checkpoints`, {
+        params: {
+          block: spotData.buildingArea,
+          floor: spotData.floorLevel,
+          unitType: spotData.unitType,
+          location: spotData.locationUnit,
+          user: currentUser
+        }
+      });
+      setPassedQuestions(res.data.passedQuestions || []);
+      setRejectedQuestions(res.data.rejectedQuestions || []);
+      setPendingQuestions(res.data.pendingQuestions || []);
+      setView('checklist');
+    } catch (err) {
+      console.error("Error fetching passed checkpoints", err);
+      setPassedQuestions([]);
+      setRejectedQuestions([]);
+      setView('checklist');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -414,6 +447,8 @@ function SEIndex() {
         setSelectedCats([]);
         setItemSelection({});
         setSpotData({ buildingArea: '', floorLevel: '', unitType: '', locationUnit: '' });
+        setInspectionStep(1);
+        setCategorySearchTerm('');
         fetchDashboardStats();
       }
     } catch (err) {
@@ -632,10 +667,10 @@ function SEIndex() {
               <FontAwesomeIcon icon={faUserTie} className="text-[#004080] text-2xl" />
             </div>
             <div className="flex-1 overflow-hidden relative z-10">
-              <h2 className="text-[16px] font-black text-gray-900 uppercase truncate leading-tight">{currentUser}</h2>
+              <h2 className="text-[18px] font-black text-gray-900 uppercase truncate leading-tight">{currentUser}</h2>
               <div className="flex flex-col gap-0.5 mt-1">
-                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div> {role}</span>
-                <span className="text-[9px] font-black text-gray-500 uppercase truncate opacity-70 tracking-tight"><FontAwesomeIcon icon={faCalendarAlt} className="mr-1 text-blue-300" /> {project}</span>
+                <span className="text-[12px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div> {role}</span>
+                <span className="text-[11px] font-black text-gray-700 uppercase truncate tracking-tight"><FontAwesomeIcon icon={faCalendarAlt} className="mr-1 text-[#004080]" /> {project}</span>
               </div>
             </div>
           </div>
@@ -643,18 +678,18 @@ function SEIndex() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center active:scale-95 transition-all cursor-pointer" onClick={() => setView('today-tasks')}>
               <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faListAlt} className="text-[#004080]" /></div>
-              <p className="text-xl font-black text-gray-900">{dashboardStats.todayTasks}</p>
-              <p className="text-[9px] font-bold text-gray-400 uppercase">Today's Checklist</p>
+              <p className="text-2xl font-black text-gray-900">{dashboardStats.todayTasks}</p>
+              <p className="text-[11px] font-bold text-gray-400 uppercase">Today's Checklist</p>
             </div>
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500 active:scale-95 transition-all cursor-pointer" onClick={fetchReworkReports}>
               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
-              <p className="text-xl font-black text-red-600">{dashboardStats.reworkCount}</p>
-              <p className="text-[9px] font-bold text-gray-400 uppercase">Reworks</p>
+              <p className="text-2xl font-black text-red-600">{dashboardStats.reworkCount}</p>
+              <p className="text-[11px] font-bold text-gray-400 uppercase">Reworks</p>
             </div>
           </div>
 
           <div className="mb-20">
-            <div className="flex justify-between mb-4"><h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
+            <div className="flex justify-between mb-4"><h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
             <div className="space-y-3">
               {dashboardStats.recentActivity.filter(r => {
                 const s = (r.status || '').toString().toLowerCase();
@@ -671,109 +706,150 @@ function SEIndex() {
                       <FontAwesomeIcon icon={isPass ? faCheckCircle : faExclamationTriangle} className="text-sm" />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <p className="text-[10px] font-black text-gray-800 truncate leading-tight uppercase">
+                      <p className="text-[12px] font-black text-gray-800 truncate leading-tight uppercase">
                         {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
                       </p>
-                      <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.submittedAt || r.date} • {r.location || 'N/A'}</p>
+                      <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.submittedAt || r.date} • {r.location || 'N/A'}</p>
                     </div>
-                    <div className={`text-[10px] font-black uppercase tracking-widest ${isPass ? 'text-green-500' : 'text-red-500'}`}>
+                    <div className={`text-[12px] font-black uppercase tracking-widest ${isPass ? 'text-green-500' : 'text-red-500'}`}>
                       {isPass ? 'PASS' : 'FAIL'}
                     </div>
                   </div>
                 );
-              }) : <div className="text-center py-10 text-gray-300 text-[10px] uppercase font-bold">No recent activity</div>}
+              }) : <div className="text-center py-10 text-gray-300 text-[12px] uppercase font-bold">No recent activity</div>}
             </div>
           </div>
-          <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 max-w-md mx-auto"><button onClick={() => setView('main')} className="bg-[#004080] text-white shadow-2xl px-10 py-5 rounded-3xl font-black text-sm uppercase tracking-widest flex items-center gap-4 active:scale-95 transition-all outline outline-4 outline-white/20"><FontAwesomeIcon icon={faPlus} /> Start Inspection</button></div>
+          <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 max-w-md mx-auto"><button onClick={() => { setView('main'); setInspectionStep(1); setCategorySearchTerm(''); setSpotData({ buildingArea: '', floorLevel: '', unitType: '', locationUnit: '' }); setSelectedCats([]); setCategoryStages({}); setItemSelection({}); }} className="bg-[#004080] text-white shadow-2xl px-10 py-5 rounded-3xl font-black text-base uppercase tracking-widest flex items-center gap-4 active:scale-95 transition-all outline outline-4 outline-white/20"><FontAwesomeIcon icon={faPlus} /> Start Inspection</button></div>
         </div>
       )}
 
       {/* INSPECTION VIEW */}
       {view === 'main' && (
         <div className="animate-in fade-in duration-500">
-          <div className="p-4"><button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-black text-xs uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button></div>
-          <div className="px-6 space-y-8">
-            <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
-              <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v) => handleSpotInputChange({ target: { name: 'buildingArea', value: v } })} />
-              <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v) => handleSpotInputChange({ target: { name: 'floorLevel', value: v } })} />
-              <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v) => handleSpotInputChange({ target: { name: 'unitType', value: v } })} />
-              <div className="space-y-1"><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Location / Flat No</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 501" /></div>
-            </div>
-            <div className="space-y-4">
-              <h3 className="text-[#004080] font-black text-xs uppercase border-l-4 border-[#004080] pl-2 ml-1">Categories</h3>
-              <div onClick={() => setShowQCDropdown(!showQCDropdown)} className="p-4 border-2 border-gray-200 rounded-xl bg-white flex justify-between items-center cursor-pointer shadow-sm"><span className="text-xs font-bold truncate pr-4 text-gray-700">{selectedCats.length > 0 ? selectedCats.map(c => c.name).join(', ') : '-- SELECT --'}</span><FontAwesomeIcon icon={showQCDropdown ? faChevronUp : faChevronDown} className="text-gray-400" /></div>
-              {showQCDropdown && (
-                <div className="bg-white border rounded-xl shadow-xl max-h-[400px] overflow-y-auto">
-                  {categories.map((c, i) => {
-                    const isSelected = selectedCats.find(s => s.name === c.name);
-                    return (
-                      <div key={i} className="border-b last:border-0 p-1">
-                        <div
-                          onClick={() => toggleCategory(c)}
-                          className={`p-3.5 flex justify-between items-center cursor-pointer rounded-lg transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                        >
-                          <span className={`text-xs font-bold ${isSelected ? 'text-[#004080]' : 'text-gray-700'}`}>{c.name}</span>
-                          <FontAwesomeIcon
-                            icon={isSelected ? faCheckSquare : faSquare}
-                            className={isSelected ? 'text-[#004080]' : 'text-gray-300'}
-                          />
-                        </div>
-
-                        {/* STAGE SELECTION LIST - Compact Vertical stack */}
-                        {isSelected && (
-                          <div className="mx-3 mb-3 p-3 bg-white border border-blue-50 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 shadow-inner">
-                            <div className="flex flex-col gap-2">
-                              {['Pre Work', 'Pour Card', 'During Work', 'After Work']
-                                .filter(stage => c.stages && c.stages[stage] && c.stages[stage].length > 0)
-                                .map(stage => {
-                                  const isStageSelected = categoryStages[c.name] === stage;
-                                  return (
-                                    <button
-                                      key={stage}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const current = categoryStages[c.name];
-                                        setCategoryStages(prev => ({
-                                          ...prev,
-                                          [c.name]: current === stage ? '' : stage
-                                        }));
-                                      }}
-                                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
-                                        ? 'bg-[#004080] text-white border-[#004080] shadow-md'
-                                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                      <span>{stage}</span>
-                                      {isStageSelected ? (
-                                        <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
-                                      ) : (
-                                        <div className="w-4 h-4 rounded-full border-2 border-gray-200"></div>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+          {inspectionStep === 1 ? (
+            <>
+              <div className="p-4"><button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-black text-sm uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Dashboard</button></div>
+              <div className="px-6 space-y-8">
+                <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                  <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v) => handleSpotInputChange({ target: { name: 'buildingArea', value: v } })} />
+                  <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v) => handleSpotInputChange({ target: { name: 'floorLevel', value: v } })} />
+                  <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v) => handleSpotInputChange({ target: { name: 'unitType', value: v } })} />
+                  <div className="space-y-1"><label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Location / Flat No</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base font-bold text-gray-900" placeholder="e.g. 501" /></div>
                 </div>
-              )}
-            </div>
-            <button onClick={handleInitialSubmit} className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-200 tracking-widest text-sm translate-y-4">Go to Checklist</button>
-          </div>
+                <button
+                  onClick={() => {
+                    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) {
+                      return alert("Pehle building info bhariye!");
+                    }
+                    setInspectionStep(2);
+                  }}
+                  className="w-full py-4 bg-[#004080] text-white font-black rounded-xl uppercase shadow-lg shadow-blue-200 tracking-widest text-base translate-y-4"
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4"><button onClick={() => setInspectionStep(1)} className="mb-4 text-[#004080] font-black text-sm uppercase"><FontAwesomeIcon icon={faArrowLeft} /> Location Details</button></div>
+              <div className="px-6 space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-[#004080] font-black text-sm uppercase border-l-4 border-[#004080] pl-2 ml-1">Categories</h3>
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-[#004080] focus:ring-1 focus:ring-blue-50 transition-all font-bold"
+                      placeholder="Search Categories..."
+                      value={categorySearchTerm}
+                      onChange={(e) => setCategorySearchTerm(e.target.value)}
+                    />
+                    <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+                    {categorySearchTerm && (
+                      <button
+                        onClick={() => setCategorySearchTerm('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold"
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Categories List (Rendered directly) */}
+                  <div className="bg-white border border-gray-200 rounded-xl shadow-xl divide-y divide-gray-100 mb-28">
+                    {categories.filter(c => c.name.toLowerCase().includes(categorySearchTerm.toLowerCase())).length > 0 ? (
+                      categories
+                        .filter(c => c.name.toLowerCase().includes(categorySearchTerm.toLowerCase()))
+                        .map((c, i) => {
+                          const isSelected = selectedCats.find(s => s.name === c.name);
+                          return (
+                            <div key={i} className="p-1">
+                              <div
+                                onClick={() => toggleCategory(c)}
+                                className={`p-3.5 flex justify-between items-center cursor-pointer rounded-lg transition-colors ${isSelected ? 'bg-blue-50 border border-blue-100 shadow-sm' : 'hover:bg-gray-50'}`}
+                              >
+                                <span className={`text-sm font-black ${isSelected ? 'text-[#004080]' : 'text-gray-700'}`}>{c.name}</span>
+                                <FontAwesomeIcon
+                                  icon={isSelected ? faChevronUp : faChevronDown}
+                                  className={isSelected ? 'text-[#004080]' : 'text-gray-400'}
+                                />
+                              </div>
+
+                              {/* STAGE SELECTION LIST - Compact Vertical stack */}
+                              {isSelected && (
+                                <div className="mx-3 mb-3 p-3 bg-white border border-blue-50 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 shadow-inner">
+                                  <div className="flex flex-col gap-2">
+                                    {['Pre Work', 'Pour Card', 'During Work', 'After Work']
+                                      .filter(stage => c.stages && c.stages[stage] && c.stages[stage].length > 0)
+                                      .map(stage => {
+                                        const isStageSelected = categoryStages[c.name] === stage;
+                                        return (
+                                          <button
+                                            key={stage}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              selectStageAndProceed(c, stage);
+                                            }}
+                                            className={`w-full px-4 py-3 rounded-xl text-[12px] font-black uppercase transition-all flex items-center justify-between border ${isStageSelected
+                                              ? 'bg-[#004080] text-white border-[#004080] shadow-md'
+                                              : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                              }`}
+                                          >
+                                            <span>{stage}</span>
+                                            {isStageSelected ? (
+                                              <FontAwesomeIcon icon={faCheckCircle} className="text-white text-xs" />
+                                            ) : (
+                                              <div className="w-4 h-4 rounded-full border-2 border-gray-200"></div>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                    ) : (
+                      <div className="p-8 text-center text-sm text-gray-400 font-bold uppercase tracking-wider">No categories found</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* CHECKLIST VIEW */}
       {view === 'checklist' && (
         <div className="p-4 animate-in slide-in-from-right duration-500">
-          <button onClick={() => setView('main')} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <button onClick={() => { setView('main'); setInspectionStep(2); }} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="space-y-6">
             {selectedCats.map((cat, ci) => (
               <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-[#004080] text-white p-4 font-black text-[10px] uppercase">
+                <div className="bg-[#004080] text-white p-4 font-black text-[12px] uppercase">
                   <span>{cat.name}</span>
                 </div>
                 <div className="p-4 space-y-8 bg-gray-50">
@@ -790,7 +866,7 @@ function SEIndex() {
                     .map(([stageName, items], si) => (
                       <div key={si} className="space-y-4">
                         {stageName !== 'General' && (
-                          <h4 className="text-[10px] font-black text-gray-700 uppercase tracking-widest border-b border-gray-300 pb-1 mb-2 italic">
+                          <h4 className="text-[12px] font-black text-gray-700 uppercase tracking-widest border-b border-gray-300 pb-1 mb-2 italic">
                             Stage: {stageName}
                           </h4>
                         )}
@@ -806,37 +882,37 @@ function SEIndex() {
                                   <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
                                     <div className="flex items-center gap-2">
                                       <span className="text-green-500 text-sm">✅</span>
-                                      <label className="text-[11px] text-gray-400 line-through leading-tight block">
+                                      <label className="text-sm text-gray-400 line-through leading-tight block font-semibold">
                                         {it.questionText}
                                       </label>
                                     </div>
-                                    <span className="text-[9px] text-green-500 font-bold">Already Cleared by QE</span>
+                                    <span className="text-[11px] text-green-600 font-black">Already Cleared by QE</span>
                                   </div>
                                 ) : isRejected ? (
                                   <div className="p-4 rounded-xl border bg-red-50 border-red-100 opacity-70 cursor-not-allowed">
                                     <div className="flex items-center gap-2">
                                       <span className="text-red-500 text-sm">❌</span>
-                                      <label className="text-[11px] text-red-400 line-through leading-tight block">
+                                      <label className="text-sm text-red-400 line-through leading-tight block font-semibold">
                                         {it.questionText}
                                       </label>
                                     </div>
-                                    <span className="text-[9px] text-red-500 font-bold">Rejected by Quality Engineer</span>
+                                    <span className="text-[11px] text-red-600 font-black">Rejected by Quality Engineer</span>
                                   </div>
                                 ) : isPending ? (
                                   <div className="p-4 rounded-xl border bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed">
                                     <div className="flex items-center gap-2">
                                       <span className="text-orange-400 text-sm">⏳</span>
-                                      <label className="text-[11px] text-gray-400 leading-tight block">
+                                      <label className="text-sm text-gray-400 leading-tight block font-semibold">
                                         {it.questionText}
                                       </label>
                                     </div>
-                                    <span className="text-[9px] text-orange-500 font-bold">Awaiting QE Action</span>
+                                    <span className="text-[11px] text-orange-600 font-black">Awaiting QE Action</span>
                                   </div>
                                 ) : (
                                   <div
                                     className={`p-4 rounded-xl border transition-all duration-300 flex justify-between items-center ${itemSelection[it._id] === 'yes' ? 'bg-green-50 border-green-200 shadow-sm' : itemSelection[it._id] === 'no' ? 'bg-red-50 border-red-200 shadow-sm' : itemSelection[it._id] === 'na' ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-100 shadow-sm'}`}
                                   >
-                                    <label className={`text-[11px] font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-700'}`}>
+                                    <label className={`text-sm font-bold leading-tight block flex-1 ${itemSelection[it._id] === 'yes' ? 'text-green-800' : itemSelection[it._id] === 'no' ? 'text-red-800' : itemSelection[it._id] === 'na' ? 'text-orange-700' : 'text-gray-800'}`}>
                                       {it.questionText}
                                     </label>
                                     <StatusSelector
@@ -857,7 +933,7 @@ function SEIndex() {
               </div>
             ))}
           </div>
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t max-w-md mx-auto z-40"><button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-sm" disabled={loading}><FontAwesomeIcon icon={loading ? faUpload : faCheckCircle} /> {loading ? 'Submitting...' : 'Submit to QE'}</button></div>
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t max-w-md mx-auto z-40"><button onClick={submitFinalReport} className="w-full py-4 bg-green-600 text-white font-black rounded-xl uppercase shadow-xl flex items-center justify-center gap-2 tracking-widest text-base" disabled={loading}><FontAwesomeIcon icon={loading ? faUpload : faCheckCircle} /> {loading ? 'Submitting...' : 'Submit to QE'}</button></div>
         </div>
       )}
 
