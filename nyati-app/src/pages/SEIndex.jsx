@@ -207,6 +207,7 @@ function SEIndex() {
   const [reworkRemark, setReworkRemark] = useState('');
   const [reworkPhotos, setReworkPhotos] = useState([]);
   const [zoomImage, setZoomImage] = useState(null);
+  const [showReworkHistory, setShowReworkHistory] = useState(false);
   const [itemSelection, setItemSelection] = useState({}); // Tracking individual item selection: 'yes', 'no', 'na' or undefined
   const [todayReports, setTodayReports] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
@@ -286,7 +287,22 @@ function SEIndex() {
   const checkPendingReworks = async (isInitial = false) => {
     try {
       const res = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
-      setReworkReports(Array.isArray(res.data) ? res.data : []);
+      const freshReports = Array.isArray(res.data) ? res.data : [];
+      setReworkReports(freshReports);
+
+      // Keep selectedRework updated if the user has the form open
+      setSelectedRework(prev => {
+        if (!prev) return null;
+        const freshReport = freshReports.find(r => r._id === prev.reportId);
+        if (freshReport && freshReport.items && freshReport.items[prev.itemIdx]) {
+          return {
+            ...freshReport.items[prev.itemIdx],
+            reportId: prev.reportId,
+            itemIdx: prev.itemIdx
+          };
+        }
+        return prev;
+      });
     } catch (err) {
       console.error("Polling error", err);
     }
@@ -570,6 +586,7 @@ function SEIndex() {
     setSelectedRework({ ...item, reportId, itemIdx });
     setReworkPhotos([]);
     setReworkRemark('');
+    setShowReworkHistory(false);
     setView('rework-form');
   }
 
@@ -652,7 +669,7 @@ function SEIndex() {
           {reworkReports.length > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>}
         </button>
         <div className="flex flex-col items-center">
-          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <img src="/logo.png" alt="Logo" className="h-[44px] w-auto" />
         </div>
         <div className="w-10"></div>
       </div>
@@ -679,17 +696,17 @@ function SEIndex() {
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center active:scale-95 transition-all cursor-pointer" onClick={() => setView('today-tasks')}>
               <div className="w-10 h-10 bg-blue-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faListAlt} className="text-[#004080]" /></div>
               <p className="text-2xl font-black text-gray-900">{dashboardStats.todayTasks}</p>
-              <p className="text-[11px] font-bold text-gray-400 uppercase">Today's Checklist</p>
+              <p className="text-[11px] font-bold text-gray-700 uppercase">Today's Checklist</p>
             </div>
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm text-center border-b-4 border-b-red-500 active:scale-95 transition-all cursor-pointer" onClick={fetchReworkReports}>
               <div className="w-10 h-10 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-2"><FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" /></div>
               <p className="text-2xl font-black text-red-600">{dashboardStats.reworkCount}</p>
-              <p className="text-[11px] font-bold text-gray-400 uppercase">Reworks</p>
+              <p className="text-[11px] font-bold text-gray-700 uppercase">Reworks</p>
             </div>
           </div>
 
           <div className="mb-20">
-            <div className="flex justify-between mb-4"><h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-widest pl-1">Recent Activity</h3></div>
+            <div className="flex justify-between mb-4"><h3 className="text-[13px] font-bold text-gray-700 uppercase tracking-widest pl-1">Recent Activity</h3></div>
             <div className="space-y-3">
               {dashboardStats.recentActivity.filter(r => {
                 const s = (r.status || '').toString().toLowerCase();
@@ -709,7 +726,11 @@ function SEIndex() {
                       <p className="text-[12px] font-black text-gray-800 truncate leading-tight uppercase">
                         {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
                       </p>
-                      <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">{r.submittedAt || r.date} • {r.location || 'N/A'}</p>
+                      <p className="text-[11px] font-bold text-gray-700 mt-1 uppercase tracking-tighter">
+                        <span className="text-blue-600">{r.submittedAt || r.date}</span>
+                        <span className="text-gray-400 mx-1.5">•</span>
+                        <span>{r.location || 'N/A'}</span>
+                      </p>
                     </div>
                     <div className={`text-[12px] font-black uppercase tracking-widest ${isPass ? 'text-green-500' : 'text-red-500'}`}>
                       {isPass ? 'PASS' : 'FAIL'}
@@ -940,16 +961,44 @@ function SEIndex() {
       {/* REWORK VIEW */}
       {view === 'rework' && (
         <div className="p-4 animate-in slide-in-from-left duration-300 mb-10">
-          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
-          <div className="flex items-center gap-2 mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-sm font-black text-red-600 uppercase">Pending Rejections</h2><span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{reworkReports.length}</span></div>
-          <div className="space-y-4">{reworkReports.map((r, ri) => (<div key={ri} className="bg-white border rounded-2xl overflow-hidden shadow-sm border-t-4 border-t-red-500"><div className="bg-red-50 p-3 flex justify-between"><div className="text-[10px] font-black text-red-700">{r.block} | {r.floor}</div><div className="text-[9px] text-gray-400 font-bold">{r.date}</div></div><div className="divide-y">{r.items.map((it, ii) => it.qeDecision === 'fail' && (<div key={ii} className="p-4 cursor-pointer hover:bg-red-50 flex justify-between items-center" onClick={() => openReworkForm(it, r._id, ii)}><div className="flex-1"><p className="text-[11px] font-bold text-gray-800">{it.question}</p><p className="text-[9px] text-red-500 font-bold mt-1">REWORK REQUIRED</p></div><FontAwesomeIcon icon={faChevronDown} className="text-gray-300 -rotate-90" /></div>))}</div></div>))}</div>
+          <button onClick={() => setView('dashboard')} className="mb-4 text-[#004080] font-bold text-base"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
+          <div className="flex items-center gap-2 mb-6 border-l-4 border-red-500 pl-3">
+            <h2 className="text-base font-black text-red-600 uppercase">Pending Rejections</h2>
+            <span className="bg-red-100 text-red-600 text-[12px] px-2 py-0.5 rounded-full font-bold">{reworkReports.length}</span>
+          </div>
+          <div className="space-y-4">
+            {reworkReports.map((r, ri) => (
+              <div key={ri} className="bg-white border rounded-2xl overflow-hidden shadow-sm border-t-4 border-t-red-500">
+                <div className="bg-red-50 p-3.5 flex justify-between items-center">
+                  <div className="text-[12px] font-medium text-red-700 leading-tight">
+                    {[r.block, r.floor, r.unitType].filter(Boolean).join(' | ')}
+                    {r.location ? ` • ${r.location}` : ''}
+                  </div>
+                  <div className="text-[11px] text-gray-700 font-bold shrink-0">
+                    {r.submittedAt || r.date}
+                  </div>
+                </div>
+                <div className="divide-y">
+                  {r.items.map((it, ii) => it.qeDecision === 'fail' && (
+                    <div key={ii} className="p-4 cursor-pointer hover:bg-red-50/50 flex justify-between items-center" onClick={() => openReworkForm(it, r._id, ii)}>
+                      <div className="flex-1 pr-4">
+                        <p className="text-[13px] font-bold text-gray-800 leading-snug">{it.question}</p>
+                        <p className="text-[10px] text-red-500 font-black mt-1 uppercase tracking-wider">REWORK REQUIRED</p>
+                      </div>
+                      <FontAwesomeIcon icon={faChevronDown} className="text-gray-400 -rotate-90 text-sm" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* REWORK FORM */}
       {view === 'rework-form' && selectedRework && (
         <div className="p-4 animate-in slide-in-from-bottom duration-400 mb-32 text-left">
-          <button onClick={() => setView('rework')} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
+          <button onClick={fetchReworkReports} className="mb-6 text-[#004080] font-bold text-sm tracking-tight flex items-center gap-2">
             <FontAwesomeIcon icon={faArrowLeft} /> Back to List
           </button>
 
@@ -977,15 +1026,15 @@ function SEIndex() {
                   <div className="space-y-4">
                     <div>
                       <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">Issue Observed</p>
-                      <p className="text-sm font-black text-gray-800 leading-tight bg-white p-3 rounded-xl border border-red-100/50 shadow-sm italic">
-                        "{selectedRework.observation || 'Please check quality again.'}"
+                      <p className="text-[14px] font-medium text-gray-800 leading-tight bg-white p-3 rounded-xl border border-red-100/50 shadow-sm">
+                        {selectedRework.observation || 'Please check quality again.'}
                       </p>
                     </div>
 
                     {selectedRework.qeRemark && (
                       <div>
-                        <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">QE Remarks</p>
-                        <p className="text-xs font-bold text-gray-600 bg-white/40 p-2 rounded-lg leading-relaxed">
+                        <p className="text-[9px] font-black text-red-400 uppercase tracking-tighter mb-1">Quality Engineer Remarks</p>
+                        <p className="text-[14px] font-medium text-gray-800 bg-white p-3 rounded-xl border border-red-100/50 shadow-sm leading-relaxed">
                           {selectedRework.qeRemark}
                         </p>
                       </div>
@@ -1007,10 +1056,107 @@ function SEIndex() {
                 </div>
               </div>
 
+              {/* HISTORICAL REWORK CHAT (WhatsApp-like bubble chat history) */}
+              {(() => {
+                const historyRounds = selectedRework?.history ? selectedRework.history.slice(0, -1) : [];
+                if (historyRounds.length === 0) return null;
+                return (
+                  <div className="space-y-6 bg-gray-50/50 p-4 rounded-2xl border border-gray-100 animate-in slide-in-from-top duration-350">
+                    <div className="space-y-6">
+                      {historyRounds.map((h, i) => (
+                        <div key={i} className="space-y-4">
+                          {/* Round Separator Tag */}
+                          <div className="flex justify-center my-2">
+                            <span className="bg-gray-200/80 text-gray-700 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-sm">
+                              Round {h.round}
+                            </span>
+                          </div>
+
+                          {/* QE Rejection Bubble (Left) */}
+                          <div className="flex flex-col items-start max-w-[90%]">
+                            <div className="flex items-center gap-1.5 mb-1 ml-1 text-gray-500 text-[10px] font-bold">
+                              <FontAwesomeIcon icon={faUserCircle} className="text-red-500" />
+                              <span>Quality Engineer</span>
+                              <span className="text-[9px] opacity-70">• {h.submittedAt || h.date}</span>
+                            </div>
+                            <div className="bg-red-50 border border-red-100/50 rounded-2xl rounded-tl-none p-3 shadow-sm w-full">
+                              <div className="space-y-2.5 text-left">
+                                <div>
+                                  <p className="text-[8px] font-black text-red-500 uppercase tracking-wider mb-0.5">Issue Observed</p>
+                                  <p className="text-[12px] font-medium text-gray-800 bg-white p-2 rounded-lg border border-red-50/50">
+                                    {h.observation || 'Please check quality again.'}
+                                  </p>
+                                </div>
+                                {h.qeRemark && (
+                                  <div>
+                                    <p className="text-[8px] font-black text-red-500 uppercase tracking-wider mb-0.5">QE Remarks</p>
+                                    <p className="text-[12px] font-medium text-gray-800 bg-white p-2 rounded-lg border border-red-50/50">
+                                      {h.qeRemark}
+                                    </p>
+                                  </div>
+                                )}
+                                {h.mediaUrls && h.mediaUrls.length > 0 && (
+                                  <div className="pt-1">
+                                    <p className="text-[8px] font-black text-red-500 uppercase tracking-wider mb-1">Evidence from QE</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {h.mediaUrls.map((p, idx) => (
+                                        <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white shadow-sm cursor-pointer" onClick={() => setZoomImage(getImageUrl(p))}>
+                                          <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="qe history evidence" onError={(e) => e.target.src = "https://via.placeholder.com/80?text=Error"} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* SE Fix Bubble (Right) */}
+                          {(h.reworkRemark || (h.reworkMediaUrls && h.reworkMediaUrls.length > 0)) && (
+                            <div className="flex flex-col items-end ml-auto max-w-[90%]">
+                              <div className="flex items-center gap-1.5 mb-1 mr-1 text-gray-500 text-[10px] font-bold">
+                                <span className="text-[9px] opacity-70">{h.submittedAt || h.date} •</span>
+                                <span>Site Engineer</span>
+                                <FontAwesomeIcon icon={faUserCircle} className="text-green-600" />
+                              </div>
+                              <div className="bg-green-50 border border-green-100/50 rounded-2xl rounded-tr-none p-3 shadow-sm w-full">
+                                <div className="space-y-2.5 text-left">
+                                  {h.reworkRemark && (
+                                    <div>
+                                      <p className="text-[8px] font-black text-green-600 uppercase tracking-wider mb-0.5">Work Completion Report</p>
+                                      <p className="text-[12px] font-medium text-gray-800 bg-white p-2 rounded-lg border border-green-50/50">
+                                        {h.reworkRemark}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {h.reworkMediaUrls && h.reworkMediaUrls.length > 0 && (
+                                    <div className="pt-1">
+                                      <p className="text-[8px] font-black text-green-600 uppercase tracking-wider mb-1">Evidence from SE</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {h.reworkMediaUrls.map((p, idx) => (
+                                          <div key={idx} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white shadow-sm cursor-pointer" onClick={() => setZoomImage(getImageUrl(p))}>
+                                            <img src={getImageUrl(p)} className="w-full h-full object-cover" alt="se history evidence" onError={(e) => e.target.src = "https://via.placeholder.com/80?text=Error"} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* SE INPUT SECTION */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex justify-between">
+                  <label className="text-[10px] font-black text-gray-700 uppercase ml-1 flex justify-between">
                     <span>Status Remark</span>
                     <span className="text-blue-500">{reworkRemark.length}/500</span>
                   </label>
@@ -1025,11 +1171,7 @@ function SEIndex() {
 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Fix Evidence Photos</label>
-                    <label className="bg-[#004080] text-white w-10 h-10 rounded-full flex items-center justify-center cursor-pointer active:scale-90 transition-all shadow-lg hover:bg-blue-700">
-                      <FontAwesomeIcon icon={faCamera} />
-                      <input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} />
-                    </label>
+                    <label className="text-[10px] font-black text-gray-700 uppercase ml-1">Fix Evidence Photos</label>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {reworkPhotos.map((p, i) => (
@@ -1040,11 +1182,19 @@ function SEIndex() {
                         </button>
                       </div>
                     ))}
+                    {reworkPhotos.length > 0 && (
+                      <label className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-50 transition-colors shrink-0">
+                        <FontAwesomeIcon icon={faCamera} className="text-lg mb-1" />
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-70">Add More</span>
+                        <input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} />
+                      </label>
+                    )}
                     {reworkPhotos.length === 0 && (
-                      <div className="w-full py-10 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-gray-300">
-                        <FontAwesomeIcon icon={faImage} size="2x" className="mb-2 opacity-30" />
+                      <label className="w-full py-10 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-300 cursor-pointer hover:bg-gray-50 transition-colors">
+                        <FontAwesomeIcon icon={faCamera} size="2x" className="mb-2 opacity-50 text-[#004080]" />
                         <p className="text-[9px] font-black uppercase tracking-widest opacity-50">At least one photo required</p>
-                      </div>
+                        <input type="file" multiple className="hidden" onChange={handleReworkPhotoChange} />
+                      </label>
                     )}
                   </div>
                 </div>
