@@ -220,6 +220,8 @@ function SEIndex() {
   const [rejectedQuestions, setRejectedQuestions] = useState([]); // Questions rejected and needing rework
   const [pendingQuestions, setPendingQuestions] = useState([]); // Questions awaiting QE action
   const [categoryStages, setCategoryStages] = useState({}); // Stores selected stage for each category { "Dado": "Pre Construction" }
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
 
   const [buildingOptions, setBuildingOptions] = useState([])
   const [floorOptions, setFloorOptions] = useState([])
@@ -232,62 +234,163 @@ function SEIndex() {
     locationUnit: ''
   })
 
+  // Helper: File to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // Helper: Base64 to file
+  const base64ToFile = (base64Data, filename, mimeType) => {
+    const arr = base64Data.split(',');
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mimeType });
+  };
+
+  const addToQueue = (type, payload) => {
+    const queue = JSON.parse(localStorage.getItem('nyati_offline_queue') || '[]');
+    queue.push({
+      id: Date.now() + Math.random().toString(36).substr(2, 5),
+      type,
+      payload,
+      createdAt: new Date().toISOString()
+    });
+    localStorage.setItem('nyati_offline_queue', JSON.stringify(queue));
+  };
+
+  const processOfflineQueue = async () => {
+    if (!navigator.onLine) return;
+    const queue = JSON.parse(localStorage.getItem('nyati_offline_queue') || '[]');
+    if (queue.length === 0) return;
+
+    setSyncing(true);
+    let remainingQueue = [...queue];
+
+    for (const item of queue) {
+      try {
+        if (item.type === 'submit-report') {
+          await axios.post(`${BASE_URL}/api/submit-report`, item.payload);
+        } else if (item.type === 'submit-rework') {
+          const formData = new FormData();
+          formData.append('id', item.payload.id);
+          formData.append('itemsData', JSON.stringify(item.payload.itemsData));
+
+          if (item.payload.mediaFiles && item.payload.mediaFiles.length > 0) {
+            for (const f of item.payload.mediaFiles) {
+              const fileObj = base64ToFile(f.data, f.filename, f.type);
+              formData.append('media', fileObj);
+            }
+          }
+          await axios.post(`${BASE_URL}/api/submit-rework`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+        remainingQueue = remainingQueue.filter(q => q.id !== item.id);
+        localStorage.setItem('nyati_offline_queue', JSON.stringify(remainingQueue));
+      } catch (err) {
+        console.error("Sync error for item:", item, err);
+        break;
+      }
+    }
+    setSyncing(false);
+    fetchDashboardStats();
+  };
+
   useEffect(() => {
     const init = async () => {
       await Promise.all([fetchInitialData(), fetchDashboardStats(), checkPendingReworks(true)]);
       setLoading(false);
+      processOfflineQueue();
     };
     init();
     const interval = setInterval(() => {
       checkPendingReworks(false);
       fetchDashboardStats();
+      processOfflineQueue();
     }, 30000);
-    return () => clearInterval(interval);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      processOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, [])
 
   const fetchDashboardStats = async () => {
     try {
-      // Use the reliable 'my-reports' endpoint
       const resAll = await axios.get(`${BASE_URL}/api/my-reports?user=${encodeURIComponent(currentUser)}`);
       const allReports = Array.isArray(resAll.data) ? resAll.data : [];
+      localStorage.setItem('nyati_cache_my_reports', JSON.stringify(allReports));
 
-      // Filter for today's tasks
-      const d = new Date();
-      const todayString = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-      const todaySubmissions = allReports.filter(r => r.date === todayString);
-      setTodayReports(todaySubmissions);
-
-      // Filter for Pending reports (QE hasn't acted yet)
-      const pending = allReports.filter(r => r.status && (r.status.toLowerCase() === 'pending' || r.status === 'Rework Submitted'));
-      setPendingReports(pending);
-
-      // Fetch Reworks
       const resRework = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
       const reworks = Array.isArray(resRework.data) ? resRework.data : [];
+      localStorage.setItem('nyati_cache_rework_reports', JSON.stringify(reworks));
 
-      // Calculate Compliance from HISTORY (approved reports)
       const resHist = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
       const history = Array.isArray(resHist.data) ? resHist.data : [];
+      localStorage.setItem('nyati_cache_history_reports', JSON.stringify(history));
 
-      const totalItems = history.reduce((acc, r) => acc + (r.items?.length || 0), 0);
-      const passedItems = history.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
-      const compliance = totalItems > 0 ? Math.round((passedItems / totalItems) * 100) : 0;
-
-      setDashboardStats({
-        todayTasks: todaySubmissions.length,
-        reworkCount: reworks.length,
-        compliance: compliance,
-        recentActivity: allReports.slice(0, 5)
-      });
+      processStats(allReports, reworks, history);
     } catch (err) {
-      console.error("Dashboard stats error", err);
+      console.error("Dashboard stats error, loading cache...", err);
+      const cachedMy = localStorage.getItem('nyati_cache_my_reports');
+      const cachedRework = localStorage.getItem('nyati_cache_rework_reports');
+      const cachedHist = localStorage.getItem('nyati_cache_history_reports');
+      processStats(
+        cachedMy ? JSON.parse(cachedMy) : [],
+        cachedRework ? JSON.parse(cachedRework) : [],
+        cachedHist ? JSON.parse(cachedHist) : []
+      );
     }
+  };
+
+  const processStats = (allReports, reworks, history) => {
+    const d = new Date();
+    const todayString = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const todaySubmissions = allReports.filter(r => r.date === todayString);
+    setTodayReports(todaySubmissions);
+
+    const pending = allReports.filter(r => r.status && (r.status.toLowerCase() === 'pending' || r.status === 'Rework Submitted'));
+    setPendingReports(pending);
+    setReworkReports(reworks);
+
+    const totalItems = history.reduce((acc, r) => acc + (r.items?.length || 0), 0);
+    const passedItems = history.reduce((acc, r) => acc + (r.items?.filter(i => i.qeDecision === 'pass').length || 0), 0);
+    const compliance = totalItems > 0 ? Math.round((passedItems / totalItems) * 100) : 0;
+
+    setDashboardStats({
+      todayTasks: todaySubmissions.length,
+      reworkCount: reworks.length,
+      compliance: compliance,
+      recentActivity: allReports.slice(0, 5)
+    });
   };
 
   const checkPendingReworks = async (isInitial = false) => {
     try {
       const res = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
       const freshReports = Array.isArray(res.data) ? res.data : [];
+      localStorage.setItem('nyati_cache_rework_reports', JSON.stringify(freshReports));
       setReworkReports(freshReports);
 
       // Keep selectedRework updated if the user has the form open
@@ -305,6 +408,22 @@ function SEIndex() {
       });
     } catch (err) {
       console.error("Polling error", err);
+      const cached = localStorage.getItem('nyati_cache_rework_reports');
+      if (cached) {
+        const cachedReports = JSON.parse(cached);
+        setSelectedRework(prev => {
+          if (!prev) return null;
+          const freshReport = cachedReports.find(r => r._id === prev.reportId);
+          if (freshReport && freshReport.items && freshReport.items[prev.itemIdx]) {
+            return {
+              ...freshReport.items[prev.itemIdx],
+              reportId: prev.reportId,
+              itemIdx: prev.itemIdx
+            };
+          }
+          return prev;
+        });
+      }
     }
   };
 
@@ -314,23 +433,34 @@ function SEIndex() {
         axios.get(`${BASE_URL}/api/checklist-items`),
         axios.get(`${BASE_URL}/api/buildings`)
       ]);
-      const grouped = {}
-      // Sort items by _id (creation order) to match Excel sequence
-      const sortedItems = [...clRes.data].sort((a, b) => (a._id || '').localeCompare(b._id || ''));
+      // Save to cache
+      localStorage.setItem('nyati_cache_checklist_items', JSON.stringify(clRes.data));
+      localStorage.setItem('nyati_cache_buildings', JSON.stringify(bldRes.data));
 
-      sortedItems.forEach(item => {
-        if (!grouped[item.category]) grouped[item.category] = {}
-        const sub = (item.subCategory || '').toString().trim() || 'General'
-        if (!grouped[item.category][sub]) grouped[item.category][sub] = []
-        grouped[item.category][sub].push(item)
-      })
-      // Convert to a format that SEIndex expects: Array of { name, stages: { stageName: items[] } }
-      setCategories(Object.entries(grouped).map(([name, stages]) => ({ name, stages })))
-      setBuildingOptions([...bldRes.data.map(b => b.name)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })))
+      processChecklistData(clRes.data, bldRes.data);
     } catch (err) {
-      console.error("Initial fetch error", err);
+      console.error("Initial fetch error, loading cache...", err);
+      const cachedItems = localStorage.getItem('nyati_cache_checklist_items');
+      const cachedBuildings = localStorage.getItem('nyati_cache_buildings');
+      if (cachedItems && cachedBuildings) {
+        processChecklistData(JSON.parse(cachedItems), JSON.parse(cachedBuildings));
+      }
     }
-  }
+  };
+
+  const processChecklistData = (itemsData, buildingsData) => {
+    const grouped = {};
+    const sortedItems = [...itemsData].sort((a, b) => (a._id || '').localeCompare(b._id || ''));
+
+    sortedItems.forEach(item => {
+      if (!grouped[item.category]) grouped[item.category] = {};
+      const sub = (item.subCategory || '').toString().trim() || 'General';
+      if (!grouped[item.category][sub]) grouped[item.category][sub] = [];
+      grouped[item.category][sub].push(item);
+    });
+    setCategories(Object.entries(grouped).map(([name, stages]) => ({ name, stages })));
+    setBuildingOptions([...buildingsData.map(b => b.name)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })));
+  };
 
   const handleSpotInputChange = async (e) => {
     const { name, value } = e.target;
@@ -338,12 +468,24 @@ function SEIndex() {
     if (name === 'buildingArea') {
       updated.floorLevel = '';
       updated.unitType = '';
-      const res = await axios.get(`${BASE_URL}/api/floors?building=${encodeURIComponent(value)}`);
-      setFloorOptions(sortFloors(res.data.map(f => f.name)));
+      try {
+        const res = await axios.get(`${BASE_URL}/api/floors?building=${encodeURIComponent(value)}`);
+        localStorage.setItem(`nyati_cache_floors_${value}`, JSON.stringify(res.data));
+        setFloorOptions(sortFloors(res.data.map(f => f.name)));
+      } catch (err) {
+        const cached = localStorage.getItem(`nyati_cache_floors_${value}`);
+        if (cached) setFloorOptions(sortFloors(JSON.parse(cached).map(f => f.name)));
+      }
     } else if (name === 'floorLevel') {
       updated.unitType = '';
-      const res = await axios.get(`${BASE_URL}/api/units?building=${encodeURIComponent(spotData.buildingArea)}&floor=${encodeURIComponent(value)}`);
-      setUnitTypeOptions(res.data.map(u => u.name));
+      try {
+        const res = await axios.get(`${BASE_URL}/api/units?building=${encodeURIComponent(spotData.buildingArea)}&floor=${encodeURIComponent(value)}`);
+        localStorage.setItem(`nyati_cache_units_${spotData.buildingArea}_${value}`, JSON.stringify(res.data));
+        setUnitTypeOptions(res.data.map(u => u.name));
+      } catch (err) {
+        const cached = localStorage.getItem(`nyati_cache_units_${spotData.buildingArea}_${value}`);
+        if (cached) setUnitTypeOptions(JSON.parse(cached).map(u => u.name));
+      }
     }
     setSpotData(updated);
   };
@@ -454,6 +596,20 @@ function SEIndex() {
       });
     });
     if (reportData.items.length === 0) return alert("Koi bhi item select nahi kiya!");
+
+    if (!navigator.onLine) {
+      addToQueue('submit-report', reportData);
+      alert('Checklist Queued for Offline Sync!');
+      setView('dashboard');
+      setSelectedCats([]);
+      setItemSelection({});
+      setSpotData({ buildingArea: '', floorLevel: '', unitType: '', locationUnit: '' });
+      setInspectionStep(1);
+      setCategorySearchTerm('');
+      fetchDashboardStats();
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await axios.post(`${BASE_URL}/api/submit-report`, reportData)
@@ -478,11 +634,17 @@ function SEIndex() {
     try {
       setLoading(true);
       const res = await axios.get(`${BASE_URL}/api/rework-reports?user=${encodeURIComponent(currentUser)}`);
-      setReworkReports(Array.isArray(res.data) ? res.data : []);
+      const reworks = Array.isArray(res.data) ? res.data : [];
+      localStorage.setItem('nyati_cache_rework_reports', JSON.stringify(reworks));
+      setReworkReports(reworks);
       setView('rework');
       setIsSidebarOpen(false);
     } catch (err) {
-      alert("Rework list fail!");
+      console.error("Rework fetch failed, loading cache...", err);
+      const cached = localStorage.getItem('nyati_cache_rework_reports');
+      setReworkReports(cached ? JSON.parse(cached) : []);
+      setView('rework');
+      setIsSidebarOpen(false);
     } finally {
       setLoading(false);
     }
@@ -491,16 +653,19 @@ function SEIndex() {
   const fetchPendingReports = async () => {
     try {
       setLoading(true);
-      // Using the already working 'my-reports' endpoint to avoid potential 404 errors if server hasn't restarted
       const res = await axios.get(`${BASE_URL}/api/my-reports?user=${encodeURIComponent(currentUser)}`);
-      const allReports = Array.isArray(res.data) ? res.data : [];
-      const pending = allReports.filter(r => r.status && r.status.toLowerCase() === 'pending');
-      setPendingReports(pending);
+      const reports = Array.isArray(res.data) ? res.data : [];
+      localStorage.setItem('nyati_cache_my_reports', JSON.stringify(reports));
+      setPendingReports(reports.filter(r => r.status && r.status.toLowerCase() === 'pending'));
       setView('pending-approval');
       setIsSidebarOpen(false);
     } catch (err) {
-      console.error("Pending list error:", err);
-      alert("Pending list fail!");
+      console.error("Pending fetch failed, loading cache...", err);
+      const cached = localStorage.getItem('nyati_cache_my_reports');
+      const reports = cached ? JSON.parse(cached) : [];
+      setPendingReports(reports.filter(r => r.status && r.status.toLowerCase() === 'pending'));
+      setView('pending-approval');
+      setIsSidebarOpen(false);
     } finally {
       setLoading(false);
     }
@@ -510,11 +675,17 @@ function SEIndex() {
     try {
       setLoading(true);
       const res = await axios.get(`${BASE_URL}/api/history-reports?user=${encodeURIComponent(currentUser)}`);
-      setHistoryReports(Array.isArray(res.data) ? res.data : []);
+      const history = Array.isArray(res.data) ? res.data : [];
+      localStorage.setItem('nyati_cache_history_reports', JSON.stringify(history));
+      setHistoryReports(history);
       setView('history');
       setIsSidebarOpen(false);
     } catch (err) {
-      alert("History fail!");
+      console.error("History fetch failed, loading cache...", err);
+      const cached = localStorage.getItem('nyati_cache_history_reports');
+      setHistoryReports(cached ? JSON.parse(cached) : []);
+      setView('history');
+      setIsSidebarOpen(false);
     } finally {
       setLoading(false);
     }
@@ -598,6 +769,42 @@ function SEIndex() {
   const submitRework = async () => {
     if (!reworkRemark) return alert("Remark likhiye!");
 
+    if (!navigator.onLine) {
+      setLoading(true);
+      try {
+        const mediaFiles = [];
+        for (const p of reworkPhotos) {
+          const base64Data = await fileToBase64(p.file);
+          mediaFiles.push({
+            filename: p.file.name,
+            type: p.file.type,
+            data: base64Data
+          });
+        }
+
+        const payload = {
+          id: selectedRework.reportId,
+          itemsData: [{
+            index: selectedRework.itemIdx,
+            reworkRemark: reworkRemark,
+            fileCount: reworkPhotos.length
+          }],
+          mediaFiles: mediaFiles
+        };
+
+        addToQueue('submit-rework', payload);
+        alert("Rework Queued for Offline Sync!");
+        fetchReworkReports();
+        fetchDashboardStats();
+      } catch (err) {
+        console.error(err);
+        alert("Rework queue failed!");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Server expects 'id', 'itemsData' (JSON string), and 'media' files
     const formData = new FormData();
     formData.append('id', selectedRework.reportId);
@@ -635,6 +842,18 @@ function SEIndex() {
 
   return (
     <div className="min-h-screen bg-white max-w-md mx-auto shadow-sm pb-10 relative overflow-x-hidden font-sans">
+      {!isOnline && (
+        <div className="bg-red-600 text-white text-[11px] font-black tracking-widest text-center py-2 px-4 uppercase sticky top-0 z-[9999] shadow-md flex items-center justify-center gap-2 animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-white"></span>
+          <span>Offline Mode — Actions will sync automatically when online</span>
+        </div>
+      )}
+      {syncing && (
+        <div className="bg-green-600 text-white text-[11px] font-black tracking-widest text-center py-2 px-4 uppercase sticky top-0 z-[9999] shadow-md flex items-center justify-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+          <span>Syncing offline actions to server...</span>
+        </div>
+      )}
 
       {/* SIDEBAR */}
       <div className={`fixed inset-0 z-[100] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>

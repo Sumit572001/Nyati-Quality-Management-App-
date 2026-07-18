@@ -37,6 +37,9 @@ function QEIndex() {
   const [activeItemIdx, setActiveItemIdx] = useState(null);
   const [isReworkRejectMode, setIsReworkRejectMode] = useState(false);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
+
   const [buildingOptions, setBuildingOptions] = useState([]);
   const [floorOptions, setFloorOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
@@ -51,13 +54,138 @@ function QEIndex() {
   const role = "Quality Engineer"
   const projectSite = user?.siteName || "Nyati Unitree"
 
-  useEffect(() => {
-    fetchInitialData();
-    fetchPendingReports();
-    fetchDashboardStats();
+  // Helper: File to base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
-    const interval = setInterval(fetchDashboardStats, 30000);
-    return () => clearInterval(interval);
+  // Helper: Base64 to file
+  const base64ToFile = (base64Data, filename, mimeType) => {
+    const arr = base64Data.split(',');
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mimeType });
+  };
+
+  const addToQueue = (type, payload) => {
+    const queue = JSON.parse(localStorage.getItem('nyati_offline_queue') || '[]');
+    queue.push({
+      id: Date.now() + Math.random().toString(36).substr(2, 5),
+      type,
+      payload,
+      createdAt: new Date().toISOString()
+    });
+    localStorage.setItem('nyati_offline_queue', JSON.stringify(queue));
+  };
+
+  const processOfflineQueue = async () => {
+    if (!navigator.onLine) return;
+    const queue = JSON.parse(localStorage.getItem('nyati_offline_queue') || '[]');
+    if (queue.length === 0) return;
+
+    setSyncing(true);
+    let remainingQueue = [...queue];
+
+    for (const item of queue) {
+      try {
+        if (item.type === 'submit-report') {
+          await axios.post(`${BASE_URL}/api/submit-report`, item.payload);
+        } else if (item.type === 'submit-rework') {
+          const formData = new FormData();
+          formData.append('id', item.payload.id);
+          formData.append('itemsData', JSON.stringify(item.payload.itemsData));
+          if (item.payload.mediaFiles && item.payload.mediaFiles.length > 0) {
+            for (const f of item.payload.mediaFiles) {
+              const fileObj = base64ToFile(f.data, f.filename, f.type);
+              formData.append('media', fileObj);
+            }
+          }
+          await axios.post(`${BASE_URL}/api/submit-rework`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } else if (item.type === 'qe-rework-decision') {
+          await axios.post(`${BASE_URL}/api/qe/rework-final-status`, item.payload);
+        } else if (item.type === 'qe-rework-reject') {
+          const formData = new FormData();
+          formData.append('reportId', item.payload.reportId);
+          formData.append('status', item.payload.status);
+          formData.append('itemIndex', item.payload.itemIndex);
+          formData.append('observation', item.payload.observation);
+          formData.append('remark', item.payload.remark);
+          formData.append('updatedAt', item.payload.updatedAt);
+          if (item.payload.mediaFiles && item.payload.mediaFiles.length > 0) {
+            for (const f of item.payload.mediaFiles) {
+              const fileObj = base64ToFile(f.data, f.filename, f.type);
+              formData.append('media', fileObj);
+            }
+          }
+          await axios.post(`${BASE_URL}/api/qe/rework-final-status`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } else if (item.type === 'qe-final-approve') {
+          const formData = new FormData();
+          formData.append('id', item.payload.id);
+          formData.append('overallStatus', item.payload.overallStatus);
+          formData.append('qeName', item.payload.qeName);
+          formData.append('itemsData', JSON.stringify(item.payload.itemsData));
+          if (item.payload.mediaFiles && item.payload.mediaFiles.length > 0) {
+            for (const f of item.payload.mediaFiles) {
+              const fileObj = base64ToFile(f.data, f.filename, f.type);
+              formData.append('media', fileObj);
+            }
+          }
+          await axios.post(`${BASE_URL}/api/final-approve-report`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+        remainingQueue = remainingQueue.filter(q => q.id !== item.id);
+        localStorage.setItem('nyati_offline_queue', JSON.stringify(remainingQueue));
+      } catch (err) {
+        console.error("Sync error for item:", item, err);
+        break;
+      }
+    }
+    setSyncing(false);
+    fetchDashboardStats();
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      await Promise.all([fetchInitialData(), fetchPendingReports(), fetchDashboardStats()]);
+      setLoading(false);
+      processOfflineQueue();
+    };
+    init();
+    const interval = setInterval(() => {
+      fetchDashboardStats();
+      processOfflineQueue();
+    }, 30000);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      processOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, [])
 
   const fetchDashboardStats = async () => {
@@ -72,30 +200,42 @@ function QEIndex() {
       const reworks = resRework.status === 'fulfilled' && Array.isArray(resRework.value.data) ? resRework.value.data : [];
       const returned = resReturned.status === 'fulfilled' && Array.isArray(resReturned.value.data) ? resReturned.value.data : [];
 
-      setPendingReports(pending);
-      setReworkApprovals(reworks);
-      setReturnedReports(returned);
+      localStorage.setItem('nyati_cache_all_reports', JSON.stringify(pending));
+      localStorage.setItem('nyati_cache_rework_approvals', JSON.stringify(reworks));
+      localStorage.setItem('nyati_cache_returned_reports', JSON.stringify(returned));
 
-      const d = new Date();
-      const today = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-
-      const todayCount = pending.filter(r => r.date === today).length;
-      const olderCount = pending.filter(r => r.date !== today).length;
-
-      setDashboardStats({
-        pendingReview: olderCount,
-        todayChecklist: todayCount,
-        waitingRework: returned.length,
-        approvalCount: reworks.length,
-        projectHealth: {
-          approved: 85,
-          pending: 10,
-          returned: 5
-        }
-      });
+      processStats(pending, reworks, returned);
     } catch (err) {
-      console.error("QE Dash stats error", err);
+      console.error("Dashboard stats fetch error, loading cache...", err);
+      const cachedPending = localStorage.getItem('nyati_cache_all_reports');
+      const cachedReworks = localStorage.getItem('nyati_cache_rework_approvals');
+      const cachedReturned = localStorage.getItem('nyati_cache_returned_reports');
+      processStats(
+        cachedPending ? JSON.parse(cachedPending) : [],
+        cachedReworks ? JSON.parse(cachedReworks) : [],
+        cachedReturned ? JSON.parse(cachedReturned) : []
+      );
     }
+  };
+
+  const processStats = (pending, reworks, returned) => {
+    setPendingReports(pending);
+    setReworkApprovals(reworks);
+    setReturnedReports(returned);
+
+    const d = new Date();
+    const today = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+    const todayCount = pending.filter(r => r.date === today).length;
+    const olderCount = pending.filter(r => r.date !== today).length;
+
+    setDashboardStats({
+      pendingReview: olderCount,
+      todayChecklist: todayCount,
+      waitingRework: returned.length,
+      approvalCount: reworks.length,
+      projectHealth: { approved: 85, pending: 10, returned: 5 }
+    });
   };
 
   const fetchInitialData = async () => {
@@ -105,24 +245,40 @@ function QEIndex() {
         axios.get(`${BASE_URL}/api/floors`),
         axios.get(`${BASE_URL}/api/units`)
       ]);
+      localStorage.setItem('nyati_cache_buildings', JSON.stringify(resBld.data));
+      localStorage.setItem('nyati_cache_floors', JSON.stringify(resFlr.data));
+      localStorage.setItem('nyati_cache_units', JSON.stringify(resUnit.data));
+
       setBuildingOptions(resBld.data.map(b => b.name));
       setFloorOptions(resFlr.data.map(f => f.name));
       setUnitOptions(resUnit.data.map(u => u.name));
     } catch (err) {
-      console.error("QE Filters load karne mein error!", err);
+      console.error("QE Filters load karne mein error, loading cache...", err);
+      const cachedBld = localStorage.getItem('nyati_cache_buildings');
+      const cachedFlr = localStorage.getItem('nyati_cache_floors');
+      const cachedUnit = localStorage.getItem('nyati_cache_units');
+      if (cachedBld && cachedFlr && cachedUnit) {
+        setBuildingOptions(JSON.parse(cachedBld).map(b => b.name));
+        setFloorOptions(JSON.parse(cachedFlr).map(f => f.name));
+        setUnitOptions(JSON.parse(cachedUnit).map(u => u.name));
+      }
     }
   };
 
   const fetchPendingReports = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/api/all-reports`)
-      setPendingReports(Array.isArray(res.data) ? res.data : [])
-      setLoading(false)
+      setLoading(true);
+      const res = await axios.get(`${BASE_URL}/api/all-reports`);
+      localStorage.setItem('nyati_cache_all_reports', JSON.stringify(res.data));
+      setPendingReports(Array.isArray(res.data) ? res.data : []);
+      setLoading(false);
     } catch (err) {
-      console.error("Error fetching reports", err)
-      setLoading(false)
+      console.error("Error fetching reports, loading cache...", err);
+      const cached = localStorage.getItem('nyati_cache_all_reports');
+      setPendingReports(cached ? JSON.parse(cached) : []);
+      setLoading(false);
     }
-  }
+  };
 
   const getReworksForApproval = () => {
     const list = [];
@@ -177,30 +333,49 @@ function QEIndex() {
         axios.get(`${BASE_URL}/api/qe/rework-approvals`),
         axios.get(`${BASE_URL}/api/qe/returned-reports`)
       ]);
+      localStorage.setItem('nyati_cache_rework_approvals', JSON.stringify(resRework.data));
+      localStorage.setItem('nyati_cache_returned_reports', JSON.stringify(resReturned.data));
+
       setReworkApprovals(Array.isArray(resRework.data) ? resRework.data : []);
       setReturnedReports(Array.isArray(resReturned.data) ? resReturned.data : []);
       setView('reworks');
       setIsSidebarOpen(false);
     } catch (err) {
-      alert("Rework data fetch karne mein error!");
+      console.error("Rework approvals fetch failed, loading cache...", err);
+      const cachedApprovals = localStorage.getItem('nyati_cache_rework_approvals');
+      const cachedReturned = localStorage.getItem('nyati_cache_returned_reports');
+      setReworkApprovals(cachedApprovals ? JSON.parse(cachedApprovals) : []);
+      setReturnedReports(cachedReturned ? JSON.parse(cachedReturned) : []);
+      setView('reworks');
+      setIsSidebarOpen(false);
     } finally {
       setLoading(false);
     }
   }
 
   const handleReworkDecision = async (status) => {
+    const payload = {
+      reportId: selectedRework._id,
+      status: status,
+      itemIndex: selectedReworkItemIdx,
+      updatedAt: new Date().toLocaleString('en-GB', { hour12: true })
+    };
+
+    if (!navigator.onLine) {
+      addToQueue('qe-rework-decision', payload);
+      alert(`Rework ${status} Queued for Offline Sync!`);
+      setView('reworks');
+      fetchDashboardStats();
+      return;
+    }
+
     try {
       setLoading(true);
-      const res = await axios.post(`${BASE_URL}/api/qe/rework-final-status`, {
-        reportId: selectedRework._id,
-        status: status,
-        itemIndex: selectedReworkItemIdx,
-        updatedAt: new Date().toLocaleString('en-GB', { hour12: true })
-      });
+      const res = await axios.post(`${BASE_URL}/api/qe/rework-final-status`, payload);
       if (res.data.success) {
         alert(`Rework ${status} successfully!`);
         setView('reworks');
-        fetchReworkApprovals();
+        fetchDashboardStats();
       }
     } catch (err) {
       alert("Status update failed!");
@@ -257,6 +432,45 @@ function QEIndex() {
   }
 
   const handleReworkRejectSubmit = async () => {
+    if (!navigator.onLine) {
+      setLoading(true);
+      try {
+        const mediaFiles = [];
+        for (const m of rejectFormData.mediaFiles) {
+          const base64Data = await fileToBase64(m.file);
+          mediaFiles.push({
+            filename: m.file.name,
+            type: m.file.type,
+            data: base64Data
+          });
+        }
+
+        const payload = {
+          reportId: selectedRework._id,
+          status: 'Rejected',
+          itemIndex: selectedReworkItemIdx,
+          observation: rejectFormData.observation,
+          remark: rejectFormData.remark,
+          updatedAt: new Date().toLocaleString('en-GB', { hour12: true }),
+          mediaFiles: mediaFiles
+        };
+
+        addToQueue('qe-rework-reject', payload);
+        alert("Rework Rejection Queued for Offline Sync!");
+        setIsRejectModalOpen(false);
+        setIsReworkRejectMode(false);
+        setRejectFormData({ observation: '', remark: '', mediaFiles: [] });
+        setView('reworks');
+        fetchDashboardStats();
+      } catch (err) {
+        console.error(err);
+        alert("Rejection queue failed!");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
       const formData = new FormData();
@@ -281,7 +495,7 @@ function QEIndex() {
         setIsReworkRejectMode(false);
         setRejectFormData({ observation: '', remark: '', mediaFiles: [] });
         setView('reworks');
-        fetchReworkApprovals();
+        fetchDashboardStats();
       }
     } catch (err) {
       console.error(err);
@@ -315,12 +529,6 @@ function QEIndex() {
     if (!allDecided) return alert("Saare items ka decision karein!");
 
     const finalStatus = selectedReport.items.some(i => i.qeDecision === 'Reject') ? 'Returned' : 'Approved';
-
-    const formData = new FormData();
-    formData.append('id', selectedReport._id);
-    formData.append('overallStatus', finalStatus);
-    formData.append('qeName', currentUser);
-
     const items = selectedReport.items.map((item, idx) => ({
       index: idx,
       qeDecision: item.qeDecision === 'Approve' ? 'pass' : 'fail',
@@ -330,6 +538,48 @@ function QEIndex() {
       fileCount: (item.qeDecision === 'Reject' && item.rejectDetails?.mediaFiles) ? item.rejectDetails.mediaFiles.length : 0
     }));
 
+    if (!navigator.onLine) {
+      setLoading(true);
+      try {
+        const mediaFiles = [];
+        for (const item of selectedReport.items) {
+          if (item.qeDecision === 'Reject' && item.rejectDetails?.mediaFiles) {
+            for (const m of item.rejectDetails.mediaFiles) {
+              const base64Data = await fileToBase64(m.file);
+              mediaFiles.push({
+                filename: m.file.name,
+                type: m.file.type,
+                data: base64Data
+              });
+            }
+          }
+        }
+
+        const payload = {
+          id: selectedReport._id,
+          overallStatus: finalStatus,
+          qeName: currentUser,
+          itemsData: items,
+          mediaFiles: mediaFiles
+        };
+
+        addToQueue('qe-final-approve', payload);
+        alert(`Inspection decision ${finalStatus} Queued for Offline Sync!`);
+        setSelectedReport(null);
+        fetchDashboardStats();
+      } catch (err) {
+        console.error(err);
+        alert("Decision queue failed!");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('id', selectedReport._id);
+    formData.append('overallStatus', finalStatus);
+    formData.append('qeName', currentUser);
     formData.append('itemsData', JSON.stringify(items));
 
     selectedReport.items.forEach((item) => {
@@ -348,7 +598,7 @@ function QEIndex() {
       if (res.data.success) {
         alert(`Report ${finalStatus}!`);
         setSelectedReport(null);
-        fetchPendingReports();
+        fetchDashboardStats();
       }
     } catch (err) {
       console.error(err);
@@ -381,6 +631,18 @@ function QEIndex() {
 
   return (
     <div className="max-w-[500px] mx-auto min-h-screen bg-white border-x border-gray-200 pb-24 font-sans relative shadow-xl overflow-x-hidden">
+      {!isOnline && (
+        <div className="bg-red-600 text-white text-[11px] font-black tracking-widest text-center py-2 px-4 uppercase sticky top-0 z-[9999] shadow-md flex items-center justify-center gap-2 animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-white"></span>
+          <span>Offline Mode — Actions will sync automatically when online</span>
+        </div>
+      )}
+      {syncing && (
+        <div className="bg-green-600 text-white text-[11px] font-black tracking-widest text-center py-2 px-4 uppercase sticky top-0 z-[9999] shadow-md flex items-center justify-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+          <span>Syncing offline actions to server...</span>
+        </div>
+      )}
 
       {/* --- REJECT MODAL --- */}
       {isRejectModalOpen && (
