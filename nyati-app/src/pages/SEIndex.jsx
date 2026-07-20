@@ -53,12 +53,12 @@ function SearchableSelect({ options, value, onChange, placeholder, label }) {
 
   return (
     <div className="space-y-1 relative" ref={containerRef}>
-      <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">{label}</label>
+      <label className="text-[13px] font-bold text-[#004080] uppercase ml-1">{label}</label>
       <div
         onClick={() => { setIsOpen(!isOpen); if (!isOpen) setSearchTerm(''); }}
         className={`w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 outline-none text-base transition-all duration-200 flex justify-between items-center cursor-pointer shadow-sm ${isOpen ? 'border-[#004080] ring-2 ring-blue-50' : 'hover:border-gray-300'}`}
       >
-        <span className={`truncate ${value ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+        <span className={`truncate ${value ? 'text-gray-900 font-bold' : 'text-gray-400 font-normal'}`}>
           {value || placeholder}
         </span>
         <FontAwesomeIcon icon={isOpen ? faChevronUp : faChevronDown} className={`text-sm transition-transform duration-200 ${isOpen ? 'text-[#004080]' : 'text-gray-400'}`} />
@@ -503,7 +503,7 @@ function SEIndex() {
 
   const selectStageAndProceed = async (cat, stage) => {
     if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) {
-      return alert("Pehle building info bhariye!");
+      return alert("Please fill in the building information first!");
     }
 
     // Optimistically set selections in case checklist view needs them
@@ -536,8 +536,8 @@ function SEIndex() {
   }
 
   const handleInitialSubmit = async () => {
-    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) return alert("Pehle building info bhariye!");
-    if (selectedCats.length === 0) return alert("Kam se kam ek category chuniye!");
+    if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) return alert("Please fill in the building information first!");
+    if (selectedCats.length === 0) return alert("Please select at least one category!");
 
     try {
       setLoading(true);
@@ -595,7 +595,7 @@ function SEIndex() {
         });
       });
     });
-    if (reportData.items.length === 0) return alert("Koi bhi item select nahi kiya!");
+    if (reportData.items.length === 0) return alert("Please select at least one item!");
 
     if (!navigator.onLine) {
       addToQueue('submit-report', reportData);
@@ -767,7 +767,7 @@ function SEIndex() {
   }
 
   const submitRework = async () => {
-    if (!reworkRemark) return alert("Remark likhiye!");
+    if (!reworkRemark) return alert("Please enter a remark!");
 
     if (!navigator.onLine) {
       setLoading(true);
@@ -973,13 +973,13 @@ function SEIndex() {
                 <div className="space-y-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
                   <SearchableSelect label="Building" placeholder="Select Building" options={buildingOptions} value={spotData.buildingArea} onChange={(v) => handleSpotInputChange({ target: { name: 'buildingArea', value: v } })} />
                   <SearchableSelect label="Floor" placeholder="Select Floor" options={floorOptions} value={spotData.floorLevel} onChange={(v) => handleSpotInputChange({ target: { name: 'floorLevel', value: v } })} />
-                  <SearchableSelect label="Unit/Area" placeholder="Select Unit/Type" options={unitTypeOptions} value={spotData.unitType} onChange={(v) => handleSpotInputChange({ target: { name: 'unitType', value: v } })} />
-                  <div className="space-y-1"><label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Location / Flat No</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base font-bold text-gray-900" placeholder="e.g. 501" /></div>
+                  <SearchableSelect label="Area" placeholder="Select Area" options={unitTypeOptions} value={spotData.unitType} onChange={(v) => handleSpotInputChange({ target: { name: 'unitType', value: v } })} />
+                  <div className="space-y-1"><label className="text-[13px] font-bold text-[#004080] uppercase ml-1">Location</label><input name="locationUnit" value={spotData.locationUnit} onChange={handleSpotInputChange} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base font-bold text-gray-900 placeholder:font-normal" placeholder="Column: C1,C2, C3..." /></div>
                 </div>
                 <button
                   onClick={() => {
                     if (!spotData.buildingArea || !spotData.floorLevel || !spotData.unitType) {
-                      return alert("Pehle building info bhariye!");
+                      return alert("Please fill in the building information first!");
                     }
                     setInspectionStep(2);
                   }}

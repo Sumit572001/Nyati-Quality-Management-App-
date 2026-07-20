@@ -11,7 +11,7 @@ function Login() {
   const navigate = useNavigate()
 
   const checkLogin = async () => {
-    if (!username || !password) return alert('Username aur Password dono bharo!')
+    if (!username || !password) return alert('Please enter both Username and Password!')
     setLoading(true)
     try {
       const res = await axios.post(`${BASE_URL}/api/login`, { username, password })
@@ -47,11 +47,11 @@ function Login() {
         }
 
       } else {
-        alert('Galat Password ya ID hai!')
+        alert('Invalid Username or Password!')
       }
     } catch (err) {
       console.error("Login error:", err)
-      alert('Server connect nahi ho raha!')
+      alert('Unable to connect to the server!')
     }
     setLoading(false)
   }

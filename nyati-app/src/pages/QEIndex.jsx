@@ -526,7 +526,7 @@ function QEIndex() {
   const submitFinalDecision = async () => {
     if (!selectedReport) return;
     const allDecided = selectedReport.items.every(i => i.qeDecision);
-    if (!allDecided) return alert("Saare items ka decision karein!");
+    if (!allDecided) return alert("Please make a decision for all items!");
 
     const finalStatus = selectedReport.items.some(i => i.qeDecision === 'Reject') ? 'Returned' : 'Approved';
     const items = selectedReport.items.map((item, idx) => ({
@@ -619,7 +619,7 @@ function QEIndex() {
       <div className="flex flex-col items-center justify-center h-screen text-center p-4">
         <FontAwesomeIcon icon={faUserCircle} size="3x" className="text-gray-300 mb-4" />
         <h2 className="text-2xl font-bold">Session Expired</h2>
-        <p className="text-base text-gray-500 mb-6">Pehle login page par jaakar login karein.</p>
+        <p className="text-base text-gray-500 mb-6">Please go to the login page and log in.</p>
         <button onClick={() => window.location.href = '/'} className="bg-[#004080] text-white px-8 py-3 rounded-lg font-bold shadow-lg text-base">Go to Login</button>
       </div>
     );

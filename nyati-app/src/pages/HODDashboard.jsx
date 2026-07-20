@@ -13,7 +13,12 @@ import {
     faUserTie,
     faChartBar,
     faCaretRight,
-    faArrowLeft
+    faArrowLeft,
+    faComments,
+    faUserCircle,
+    faTimes,
+    faInfoCircle,
+    faHistory
 } from '@fortawesome/free-solid-svg-icons';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import BASE_URL from '../config';
@@ -32,13 +37,48 @@ const HODDashboard = () => {
     const [expandedCategory, setExpandedCategory] = useState(null);
     const [graphTimeframe, setGraphTimeframe] = useState('Monthly');
     const [zoomImage, setZoomImage] = useState(null);
+    const [activeConversation, setActiveConversation] = useState(null);
 
     const getImageUrl = (p) => p && (p.startsWith('http') ? p : `${BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`);
+    const formatTimeOnly = (t) => t && t.includes(',') ? t.split(',')[1].trim() : (t || '-');
+    const formatFullDateTime = (d, t) => {
+        let datePart = '';
+        let timePart = '';
+
+        if (d && typeof d === 'string') {
+            if (d.includes(',')) {
+                const parts = d.split(',');
+                datePart = parts[0].trim();
+                timePart = parts[1]?.trim() || '';
+            } else {
+                datePart = d !== '-' ? d.trim() : '';
+            }
+        }
+
+        if (t && typeof t === 'string' && t !== '-') {
+            if (t.includes(',')) {
+                const parts = t.split(',');
+                if (!datePart) datePart = parts[0].trim();
+                timePart = parts[1]?.trim() || '';
+            } else if (!timePart) {
+                timePart = t.trim();
+            }
+        }
+
+        if (datePart && timePart && timePart.includes(datePart)) {
+            timePart = timePart.replace(datePart, '').replace(/^,\s*/, '').trim();
+        }
+
+        if (datePart && timePart) return `${datePart} | ${timePart}`;
+        if (datePart) return datePart;
+        if (timePart) return timePart;
+        return 'N/A';
+    };
 
     const dynamicGraphData = React.useMemo(() => {
         const reworksList = (summary.reworks || []).filter(report => {
             if (selectedProject === 'All Projects') return true;
-            return report.projectName === selectedProject;
+            return (report.projectName || '').trim().toLowerCase() === (selectedProject || '').trim().toLowerCase();
         });
 
         // 1. Weekly Data (Mon - Sun)
@@ -52,7 +92,7 @@ const HODDashboard = () => {
         };
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-        // 3. Yearly Data (last 5 years dynamically based on current year)
+        // 3. Yearly Data
         const currentYear = new Date().getFullYear();
         const yearlyCounts = {};
         for (let i = 4; i >= 0; i--) {
@@ -61,11 +101,33 @@ const HODDashboard = () => {
 
         // Loop through all rework reports and their items
         reworksList.forEach(report => {
-            if (!report.date) return;
-            const parts = report.date.split('/');
-            if (parts.length !== 3) return;
-            const d = new Date(parts[2], parts[1] - 1, parts[0]);
-            if (isNaN(d.getTime())) return;
+            let d = null;
+            if (report.date) {
+                if (report.date.includes('/')) {
+                    const parts = report.date.split('/');
+                    if (parts.length === 3) {
+                        d = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                } else if (report.date.includes('-')) {
+                    const parts = report.date.split('-');
+                    if (parts.length === 3) {
+                        if (parts[0].length === 4) {
+                            d = new Date(parts[0], parts[1] - 1, parts[2]);
+                        } else {
+                            d = new Date(parts[2], parts[1] - 1, parts[0]);
+                        }
+                    }
+                } else {
+                    d = new Date(report.date);
+                }
+            }
+            if (!d || isNaN(d.getTime())) {
+                if (report.createdAt) {
+                    d = new Date(report.createdAt);
+                } else {
+                    d = new Date();
+                }
+            }
 
             // Count the failed items
             let failedItemsInReport = 0;
@@ -77,22 +139,21 @@ const HODDashboard = () => {
                     }
                 });
             }
-
-            if (failedItemsInReport === 0) return;
+            if (failedItemsInReport === 0) {
+                failedItemsInReport = 1;
+            }
 
             // Accumulate day of week
             const dayName = dayNames[d.getDay()];
-            if (dayName === 'Sun') weeklyCounts.Sun += failedItemsInReport;
-            else if (dayName === 'Mon') weeklyCounts.Mon += failedItemsInReport;
-            else if (dayName === 'Tue') weeklyCounts.Tue += failedItemsInReport;
-            else if (dayName === 'Wed') weeklyCounts.Wed += failedItemsInReport;
-            else if (dayName === 'Thu') weeklyCounts.Thu += failedItemsInReport;
-            else if (dayName === 'Fri') weeklyCounts.Fri += failedItemsInReport;
-            else if (dayName === 'Sat') weeklyCounts.Sat += failedItemsInReport;
+            if (weeklyCounts[dayName] !== undefined) {
+                weeklyCounts[dayName] += failedItemsInReport;
+            }
 
             // Accumulate month
             const monthName = monthNames[d.getMonth()];
-            monthlyCounts[monthName] += failedItemsInReport;
+            if (monthlyCounts[monthName] !== undefined) {
+                monthlyCounts[monthName] += failedItemsInReport;
+            }
 
             // Accumulate year
             const year = d.getFullYear();
@@ -128,6 +189,17 @@ const HODDashboard = () => {
             Yearly: yearlyData
         };
     }, [summary.reworks, selectedProject]);
+
+    const currentProjectReworksCount = React.useMemo(() => {
+        if (selectedProject === 'All Projects') {
+            return summary.totalReworks || 0;
+        }
+        if (projectDetails && projectDetails.categoryWise) {
+            return projectDetails.categoryWise.reduce((sum, cat) => sum + (cat.reworkCount || cat.checkpoints?.length || 0), 0);
+        }
+        const matchingReports = (summary.reworks || []).filter(r => (r.projectName || '').trim().toLowerCase() === selectedProject.trim().toLowerCase());
+        return matchingReports.length;
+    }, [summary, selectedProject, projectDetails]);
 
     // Auth Check
     useEffect(() => {
@@ -254,8 +326,8 @@ const HODDashboard = () => {
                         <div className="bg-red-50 p-6 rounded-3xl border border-red-100 flex items-center justify-between 
         transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Reworks</p>
-                                <h2 className="text-3xl font-black text-red-600 mt-1">{summary.totalReworks}</h2>
+                                <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Total Reworks</p>
+                                <h2 className="text-3xl font-black text-red-600 mt-1">{currentProjectReworksCount}</h2>
                             </div>
                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-600 text-xl shadow-sm border border-red-50">
                                 <FontAwesomeIcon icon={faExclamationTriangle} />
@@ -266,7 +338,7 @@ const HODDashboard = () => {
                         <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-center justify-between 
         transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Projects Affected</p>
+                                <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Projects Affected</p>
                                 <h2 className="text-3xl font-black text-blue-700 mt-1">{projectsAffected}</h2>
                             </div>
                             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-700 text-xl shadow-sm border border-blue-50">
@@ -278,7 +350,7 @@ const HODDashboard = () => {
                         <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 flex items-center justify-between 
         transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer">
                             <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Most Critical</p>
+                                <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Most Critical</p>
                                 <h2 className="text-xl font-black text-orange-600 mt-2 truncate">
                                     {mostCritical}
                                 </h2>
@@ -293,12 +365,16 @@ const HODDashboard = () => {
                     <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col">
                         <div className="flex items-center justify-between mb-8">
                             <div>
-                                <h3 className="text-lg font-black text-gray-800">Rework Analysis</h3>
-                                <p className="text-xs text-gray-400 font-medium">Trend over {graphTimeframe.toLowerCase()}</p>
+                                <h3 className="text-xl font-black text-gray-900">
+                                    Rework Analysis {selectedProject !== 'All Projects' ? `(${selectedProject})` : ''}
+                                </h3>
+                                <p className="text-xs text-gray-900 font-bold">
+                                    Trend over {graphTimeframe.toLowerCase()} {selectedProject !== 'All Projects' ? `• ${selectedProject}` : '• All Projects'}
+                                </p>
                             </div>
                             <div className="relative">
                                 <select
-                                    className="appearance-none bg-gray-50 border border-gray-200 text-xs font-bold rounded-xl px-4 py-2 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 transition cursor-pointer"
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-xs font-bold text-gray-900 rounded-xl px-4 py-2 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 transition cursor-pointer"
                                     value={graphTimeframe}
                                     onChange={(e) => setGraphTimeframe(e.target.value)}
                                 >
@@ -306,7 +382,7 @@ const HODDashboard = () => {
                                     <option value="Monthly">Monthly</option>
                                     <option value="Yearly">Yearly</option>
                                 </select>
-                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]" />
+                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-900 pointer-events-none text-[10px]" />
                             </div>
                         </div>
 
@@ -319,18 +395,18 @@ const HODDashboard = () => {
                                             <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                     <XAxis
                                         dataKey="name"
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                        tick={{ fontSize: 12, fontWeight: 700, fill: '#111827' }}
                                         dy={10}
                                     />
                                     <YAxis
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                        tick={{ fontSize: 12, fontWeight: 700, fill: '#111827' }}
                                     />
                                     <Tooltip
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
@@ -357,7 +433,7 @@ const HODDashboard = () => {
                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* 1. Project Filter */}
                         <div>
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Project</label>
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest ml-1 mb-1.5 block">Project</label>
                             <div className="relative group">
                                 <select
                                     className="appearance-none bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 pr-10 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full cursor-pointer"
@@ -369,13 +445,13 @@ const HODDashboard = () => {
                                         <option key={p.projectName} value={p.projectName}>{p.projectName}</option>
                                     ))}
                                 </select>
-                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs" />
+                                <FontAwesomeIcon icon={faChevronDown} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-900 pointer-events-none text-xs" />
                             </div>
                         </div>
 
                         {/* 2. Custom Status Dropdown with Radios */}
                         <div className="relative">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">Status Filter</label>
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest ml-1 mb-1.5 block">Status Filter</label>
                             <button
                                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
                                 className="flex items-center justify-between bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 w-full hover:border-[#004080] transition group shadow-sm"
@@ -384,7 +460,7 @@ const HODDashboard = () => {
                                     <span className={`w-2 h-2 rounded-full ${filterStatus === 'All' ? 'bg-blue-500' : filterStatus === 'Open' ? 'bg-red-500' : 'bg-green-500'}`}></span>
                                     <span>{filterStatus === 'Closed' ? 'Closed / Approved' : filterStatus === 'Open' ? 'Open Reworks' : 'All Reworks'}</span>
                                 </div>
-                                <FontAwesomeIcon icon={faChevronDown} className={`text-gray-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                                <FontAwesomeIcon icon={faChevronDown} className={`text-gray-900 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
 
                             {statusDropdownOpen && (
@@ -422,7 +498,7 @@ const HODDashboard = () => {
 
                         {/* 3. From Date */}
                         <div>
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">From Date</label>
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest ml-1 mb-1.5 block">From Date</label>
                             <input
                                 type="date"
                                 className="bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
@@ -433,7 +509,7 @@ const HODDashboard = () => {
 
                         {/* 4. To Date */}
                         <div>
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 mb-1.5 block">To Date</label>
+                            <label className="text-xs font-black text-gray-900 uppercase tracking-widest ml-1 mb-1.5 block">To Date</label>
                             <input
                                 type="date"
                                 className="bg-gray-50 border border-gray-200 text-sm font-bold rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#004080]/20 focus:border-[#004080] transition w-full"
@@ -452,7 +528,7 @@ const HODDashboard = () => {
                                 setStartDate('');
                                 setEndDate('');
                             }}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-500 text-[10px] font-bold uppercase px-4 py-2.5 rounded-xl transition-all"
+                            className="bg-[#004080] hover:bg-[#003366] text-white text-xs font-black uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
                         >
                             Reset
                         </button>
@@ -463,7 +539,7 @@ const HODDashboard = () => {
                 {!projectDetails ? (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                            <h3 className="font-black text-gray-400 text-xs uppercase tracking-widest flex items-center gap-2">
+                            <h3 className="font-black text-gray-900 text-xs uppercase tracking-widest flex items-center gap-2">
                                 <FontAwesomeIcon icon={faChartBar} /> Projects
                             </h3>
                             <button onClick={fetchSummary} className="text-primary text-sm font-bold hover:underline flex items-center gap-1">
@@ -472,12 +548,12 @@ const HODDashboard = () => {
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase border-b border-gray-100">
+                                <thead className="bg-[#004080] text-xs font-bold text-white uppercase border-b border-[#003366]">
                                     <tr>
-                                        <th className="px-6 py-3 w-16">Sr.No.</th>
-                                        <th className="px-6 py-3">Project Name</th>
-                                        <th className="px-6 py-3">Total Reworks</th>
-                                        <th className="px-6 py-3 text-right">Status</th>
+                                        <th className="px-6 py-3.5 w-16 border-r border-white/20">Sr.No.</th>
+                                        <th className="px-6 py-3.5 border-r border-white/20">Project Name</th>
+                                        <th className="px-6 py-3.5 border-r border-white/20">Total Reworks</th>
+                                        <th className="px-6 py-3.5 text-right">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -554,7 +630,9 @@ const HODDashboard = () => {
                                             <span className="font-bold text-base">{cat.category}</span>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <span className="bg-gray-100 text-gray-500 text-xs font-black px-3 py-1.5 rounded-full">{cat.reworkCount} REWORKS</span>
+                                            <span className="bg-gray-100 text-gray-900 text-xs font-black px-3.5 py-1.5 rounded-full border border-gray-200 shadow-xs">
+                                                {(cat.reworkCount !== undefined && cat.reworkCount > 0) ? cat.reworkCount : (cat.checkpoints?.length || 0)} {(cat.reworkCount === 1 || cat.checkpoints?.length === 1) ? 'REWORK' : 'REWORKS'}
+                                            </span>
                                             <div className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-100 group-hover:bg-gray-200 transition-colors">
                                                 <FontAwesomeIcon
                                                     icon={faChevronDown}
@@ -567,51 +645,66 @@ const HODDashboard = () => {
 
                                     {expandedCategory === cat.category && (
                                         <div className="border-t border-gray-50 overflow-x-auto transition-all duration-300">
-                                            <table className="w-full text-xs">
-                                                <thead className="bg-gray-50 shadow-inner">
-                                                    <tr className="text-gray-400 font-bold uppercase tracking-tighter">
-                                                        <th className="px-4 py-2 border-r border-gray-100 italic">#</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100">Checkpoint Question</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100">Location</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100">Engineer</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Name</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Opening Date</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Closing Date</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Remark</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">Rework Status</th>
-                                                        <th className="px-4 py-2 border-r border-gray-100 uppercase tracking-tighter">QE Evidence</th>
-                                                        <th className="px-4 py-2 uppercase tracking-tighter">SE Rework Photo</th>
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-[#004080] shadow-md">
+                                                    <tr className="text-white font-bold uppercase tracking-wider text-sm border-b border-[#003366]">
+                                                        <th className="px-4 py-3.5 border-r border-white/20 italic">#</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20">Checkpoint Question</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20">Location</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 text-center uppercase tracking-wider">Site Engineer</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 text-center uppercase tracking-wider">Quality Engineer</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider text-center">Rework Count</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider">Opening Date</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider">Closing Date</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider">Quality Engineer Remark</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider">Rework Status</th>
+                                                        <th className="px-4 py-3.5 border-r border-white/20 uppercase tracking-wider">Quality Engineer Evidence</th>
+                                                        <th className="px-4 py-3.5 uppercase tracking-wider">Site Engineer Rework Photo</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-gray-50">
+                                                <tbody className="divide-y divide-gray-100">
                                                     {cat.checkpoints.map((cp, i) => (
                                                         <tr key={i} className="hover:bg-indigo-50/30 transition">
-                                                            <td className="px-4 py-3 text-center font-bold text-gray-300">{i + 1}</td>
-                                                            <td className="px-4 py-3 font-medium min-w-[200px]">{cp.question}</td>
-                                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{cp.block}-{cp.floor}</span>
-                                                                <span className="ml-1 opacity-70">{cp.location}</span>
+                                                            <td className="px-4 py-4 text-center font-medium text-gray-500 text-sm">{i + 1}</td>
+                                                            <td className="px-4 py-4 font-medium text-gray-900 text-sm min-w-[240px]">{cp.question}</td>
+                                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">{cp.block}-{cp.floor}</span>
+                                                                <span className="ml-2 font-medium text-gray-800 text-sm">{cp.location}</span>
                                                             </td>
-                                                            <td className="px-4 py-3 font-bold">{cp.seName}</td>
-                                                            <td className="px-4 py-3">{cp.qeName || 'N/A'}</td>
-                                                            <td className="px-4 py-3 whitespace-nowrap border-r border-gray-50">
-                                                                <div className="font-bold">{cp.openingDate}</div>
-                                                                <div className="text-[9px] opacity-60 font-medium">{cp.openingTime}</div>
+                                                            <td className="px-4 py-4 text-center font-medium text-gray-900 text-sm whitespace-nowrap">{cp.seName}</td>
+                                                            <td className="px-4 py-4 text-center font-medium text-gray-900 text-sm whitespace-nowrap">{cp.qeName || 'N/A'}</td>
+                                                            <td className="px-4 py-4 text-center border-r border-gray-100 whitespace-nowrap">
+                                                                <button
+                                                                    onClick={() => setActiveConversation(cp)}
+                                                                    className="px-3.5 py-1.5 bg-blue-50 hover:bg-[#004080] hover:text-white text-[#004080] font-black text-xs rounded-full border border-blue-200 transition-all active:scale-95 shadow-sm flex items-center justify-center gap-1.5 mx-auto group cursor-pointer"
+                                                                    title="Click to view conversation history between SE & QE"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faComments} className="text-xs group-hover:text-white text-[#004080]" />
+                                                                    <span>{cp.reworkCount || (cp.history?.length || 1)} {(cp.reworkCount || (cp.history?.length || 1)) === 1 ? 'Round' : 'Rounds'}</span>
+                                                                </button>
                                                             </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap border-r border-gray-50">
-                                                                <div className={`font-bold ${cp.closingDate === '-' ? 'text-gray-300' : 'text-green-600'}`}>{cp.closingDate}</div>
-                                                                {cp.closingTime !== '-' && <div className="text-[9px] opacity-60 font-medium">{cp.closingTime}</div>}
+                                                            <td className="px-4 py-4 whitespace-nowrap border-r border-gray-100">
+                                                                <div className="font-medium text-gray-900 text-sm">{cp.openingDate}</div>
+                                                                <div className="text-xs font-semibold text-[#004080] mt-0.5">{formatTimeOnly(cp.openingTime)}</div>
                                                             </td>
-                                                            <td className="px-4 py-3 italic text-red-500 font-medium border-r border-gray-50">{cp.qeRemark || cp.observation}</td>
-                                                            <td className="px-4 py-3 text-center border-r border-gray-50">
-                                                                <span className={`text-[10px] font-black px-3 py-1 rounded shadow-sm border ${cp.status === 'Approved'
-                                                                    ? 'bg-green-50 text-green-600 border-green-200'
-                                                                    : 'bg-red-50 text-red-600 border-red-200'
+                                                            <td className="px-4 py-4 whitespace-nowrap border-r border-gray-100">
+                                                                {cp.closingDate === '-' ? (
+                                                                    <span className="text-gray-700 font-bold text-base">—</span>
+                                                                ) : (
+                                                                    <div className="font-medium text-sm text-green-600">{cp.closingDate}</div>
+                                                                )}
+                                                                {(cp.closingTime && cp.closingTime !== '-') && <div className="text-xs font-semibold text-[#004080] mt-0.5">{formatTimeOnly(cp.closingTime)}</div>}
+                                                            </td>
+                                                            <td className="px-4 py-4 italic text-red-600 font-medium text-sm border-r border-gray-100">{cp.qeRemark || cp.observation}</td>
+                                                            <td className="px-4 py-4 text-center border-r border-gray-100">
+                                                                <span className={`text-xs font-black px-3.5 py-1.5 rounded-md shadow-sm border ${cp.status === 'Approved'
+                                                                    ? 'bg-green-50 text-green-700 border-green-300'
+                                                                    : 'bg-red-50 text-red-700 border-red-300'
                                                                     }`}>
                                                                     {cp.status === 'Approved' ? 'CLOSED' : 'OPEN'}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-3 border-r border-gray-50">
+                                                            <td className="px-4 py-4 border-r border-gray-100">
                                                                 <div className="flex gap-1.5 overflow-x-auto max-w-[120px] py-0.5">
                                                                     {cp.qeMediaUrls && cp.qeMediaUrls.length > 0 ? (
                                                                         cp.qeMediaUrls.map((img, idx) => (
@@ -625,11 +718,11 @@ const HODDashboard = () => {
                                                                             />
                                                                         ))
                                                                     ) : (
-                                                                        <span className="text-gray-400 text-[10px] italic">No Photos</span>
+                                                                        <span className="text-gray-400 text-[10px] italic font-medium">No Photos</span>
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-4 py-3">
+                                                            <td className="px-4 py-4">
                                                                 <div className="flex gap-1.5 overflow-x-auto max-w-[120px] py-0.5">
                                                                     {cp.seMediaUrls && cp.seMediaUrls.length > 0 ? (
                                                                         cp.seMediaUrls.map((img, idx) => (
@@ -643,7 +736,7 @@ const HODDashboard = () => {
                                                                             />
                                                                         ))
                                                                     ) : (
-                                                                        <span className="text-gray-400 text-[10px] italic">No Photos</span>
+                                                                        <span className="text-gray-400 text-[10px] italic font-medium">No Photos</span>
                                                                     )}
                                                                 </div>
                                                             </td>
@@ -659,6 +752,248 @@ const HODDashboard = () => {
                     </div>
                 )}
             </main>
+
+            {/* --- SITE ENGINEER & QUALITY ENGINEER CONVERSATION HISTORY MODAL --- */}
+            {activeConversation && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9995] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                        {/* Header */}
+                        <div className="bg-[#004080] p-5 text-white flex items-center justify-between shadow-md">
+                            <div>
+                                <span className="text-xs font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full">
+                                    Site Engineer & Quality Engineer Conversation History
+                                </span>
+                                <h3 className="text-lg font-bold mt-2.5 leading-snug">
+                                    {activeConversation.question}
+                                </h3>
+                                <p className="text-sm text-blue-100 font-medium mt-1">
+                                    Location: <span className="font-bold">{activeConversation.block}-{activeConversation.floor} | {activeConversation.location || 'N/A'}</span>
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setActiveConversation(null)}
+                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition active:scale-95 cursor-pointer"
+                            >
+                                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+                            </button>
+                        </div>
+
+                        {/* Sub-header info */}
+                        <div className="bg-blue-50/60 px-6 py-3.5 border-b border-blue-100 flex items-center justify-between text-sm font-bold text-gray-800">
+                            <div>Site Engineer: <span className="text-[#004080] font-bold">{activeConversation.seName}</span></div>
+                            <div>Quality Engineer: <span className="text-[#004080] font-bold">{activeConversation.qeName || 'N/A'}</span></div>
+                            <div>Total Rounds: <span className="bg-[#004080] text-white px-3 py-0.5 rounded-full text-xs font-black">{activeConversation.reworkCount || (activeConversation.history?.length || 1)}</span></div>
+                        </div>
+
+                        {/* Conversation Body */}
+                        <div className="p-6 overflow-y-auto space-y-6 bg-gray-50 flex-1">
+                            {activeConversation.history && activeConversation.history.length > 0 ? (
+                                activeConversation.history.map((h, i) => {
+                                    const isLatestRound = i === activeConversation.history.length - 1;
+                                    const qeObs = h.observation || (isLatestRound ? activeConversation.observation : '') || 'Quality issue flagged for rework.';
+                                    const qeRem = h.qeRemark || (isLatestRound ? activeConversation.qeRemark : '');
+                                    const qePhotos = (h.mediaUrls && h.mediaUrls.length > 0) ? h.mediaUrls : (isLatestRound ? activeConversation.qeMediaUrls : []);
+
+                                    const seRem = h.reworkRemark || (isLatestRound ? activeConversation.reworkRemark : '');
+                                    const sePhotos = (h.reworkMediaUrls && h.reworkMediaUrls.length > 0) ? h.reworkMediaUrls : (isLatestRound ? activeConversation.seMediaUrls : []);
+                                    const hasSeSubmitted = Boolean(seRem || (sePhotos && sePhotos.length > 0));
+
+                                    return (
+                                        <div key={i} className="space-y-4">
+                                            {/* Round Tag */}
+                                            <div className="flex justify-center my-2">
+                                                <span className="bg-gray-200 text-gray-800 text-xs font-black uppercase tracking-widest px-4 py-1 rounded-full shadow-sm border border-gray-300">
+                                                    Round {h.round || (i + 1)}
+                                                </span>
+                                            </div>
+
+                                            {/* Quality Engineer Rejection Bubble */}
+                                            <div className="flex flex-col items-start max-w-[90%]">
+                                                <div className="flex items-center gap-1.5 mb-1.5 ml-1 text-gray-900 font-bold text-xs">
+                                                    <FontAwesomeIcon icon={faUserCircle} className="text-red-500 text-sm" />
+                                                    <span>Quality Engineer ({activeConversation.qeName || 'Quality Engineer'})</span>
+                                                    <span className="text-gray-900 font-bold text-xs">• {formatFullDateTime(h.submittedAt || h.date || activeConversation.openingDate, h.openingTime || activeConversation.openingTime)}</span>
+                                                </div>
+                                                <div className="bg-red-50 border border-red-100 rounded-2xl rounded-tl-none p-4 shadow-sm w-full">
+                                                    <div className="space-y-3 text-left">
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1">Issue Observed</p>
+                                                            <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-red-100">
+                                                                {qeObs}
+                                                            </p>
+                                                        </div>
+                                                        {qeRem && (
+                                                            <div>
+                                                                <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1">Quality Engineer Remark</p>
+                                                                <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-red-100">
+                                                                    {qeRem}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {qePhotos && qePhotos.length > 0 && (
+                                                            <div className="pt-1">
+                                                                <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1.5">Evidence Photos (Quality Engineer)</p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {qePhotos.map((p, idx) => (
+                                                                        <img
+                                                                            key={idx}
+                                                                            src={getImageUrl(p)}
+                                                                            className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                                            onClick={() => setZoomImage(getImageUrl(p))}
+                                                                            alt="Quality Engineer evidence"
+                                                                            onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Site Engineer Rework Bubble */}
+                                            {hasSeSubmitted ? (
+                                                <div className="flex flex-col items-end ml-auto max-w-[90%]">
+                                                    <div className="flex items-center gap-1.5 mb-1.5 mr-1 text-gray-900 font-bold text-xs">
+                                                        <span className="text-gray-900 font-bold text-xs">{formatFullDateTime(h.reworkSubmittedAt || h.submittedAt || activeConversation.closingDate, h.reworkTime || activeConversation.closingTime || activeConversation.openingTime)} •</span>
+                                                        <span>Site Engineer ({activeConversation.seName})</span>
+                                                        <FontAwesomeIcon icon={faUserCircle} className="text-green-600 text-sm" />
+                                                    </div>
+                                                    <div className="bg-green-50 border border-green-100 rounded-2xl rounded-tr-none p-4 shadow-sm w-full">
+                                                        <div className="space-y-3 text-left">
+                                                            <div>
+                                                                <p className="text-[10px] font-black text-green-700 uppercase tracking-wider mb-1">Site Engineer Remark</p>
+                                                                <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-green-100">
+                                                                    {seRem || 'Rework completed as per specifications.'}
+                                                                </p>
+                                                            </div>
+                                                            {sePhotos && sePhotos.length > 0 && (
+                                                                <div className="pt-1">
+                                                                    <p className="text-[10px] font-black text-green-700 uppercase tracking-wider mb-1.5">Evidence Photos (Site Engineer Rework)</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {sePhotos.map((p, idx) => (
+                                                                            <img
+                                                                                key={idx}
+                                                                                src={getImageUrl(p)}
+                                                                                className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                                                onClick={() => setZoomImage(getImageUrl(p))}
+                                                                                alt="Site Engineer evidence"
+                                                                                onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-end ml-auto max-w-[90%]">
+                                                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2.5 text-center shadow-sm">
+                                                        <p className="text-xs text-yellow-800 font-bold flex items-center gap-1.5">
+                                                            <span>⏳</span>
+                                                            <span>Site Engineer has not submitted rework for Round {h.round || (i + 1)} yet</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                /* Fallback single-round conversation view */
+                                <div className="space-y-4">
+                                    <div className="flex justify-center my-2">
+                                        <span className="bg-gray-200 text-gray-800 text-xs font-black uppercase tracking-widest px-4 py-1 rounded-full shadow-sm border border-gray-300">
+                                            Round 1
+                                        </span>
+                                    </div>
+
+                                    {/* Quality Engineer Rejection Bubble */}
+                                    <div className="flex flex-col items-start max-w-[90%]">
+                                        <div className="flex items-center gap-1.5 mb-1.5 ml-1 text-gray-900 font-bold text-xs">
+                                            <FontAwesomeIcon icon={faUserCircle} className="text-red-500 text-sm" />
+                                            <span>Quality Engineer ({activeConversation.qeName || 'Quality Engineer'})</span>
+                                            <span className="text-gray-900 font-bold text-xs">• {formatFullDateTime(activeConversation.openingDate, activeConversation.openingTime)}</span>
+                                        </div>
+                                        <div className="bg-red-50 border border-red-100 rounded-2xl rounded-tl-none p-4 shadow-sm w-full">
+                                            <div className="space-y-3 text-left">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1">Issue Observed</p>
+                                                    <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-red-100">
+                                                        {activeConversation.observation || 'Quality issue flagged for rework.'}
+                                                    </p>
+                                                </div>
+                                                {activeConversation.qeRemark && (
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1">Quality Engineer Remark</p>
+                                                        <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-red-100">
+                                                            {activeConversation.qeRemark}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {activeConversation.qeMediaUrls && activeConversation.qeMediaUrls.length > 0 && (
+                                                    <div className="pt-1">
+                                                        <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-1.5">Evidence Photos (Quality Engineer)</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {activeConversation.qeMediaUrls.map((p, idx) => (
+                                                                <img
+                                                                    key={idx}
+                                                                    src={getImageUrl(p)}
+                                                                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                                    onClick={() => setZoomImage(getImageUrl(p))}
+                                                                    alt="Quality Engineer evidence"
+                                                                    onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Site Engineer Rework Bubble */}
+                                    <div className="flex flex-col items-end ml-auto max-w-[90%]">
+                                        <div className="flex items-center gap-1.5 mb-1.5 mr-1 text-gray-900 font-bold text-xs">
+                                            <span className="text-gray-900 font-bold text-xs">{formatFullDateTime(activeConversation.closingDate !== '-' ? activeConversation.closingDate : activeConversation.openingDate, activeConversation.closingTime !== '-' ? activeConversation.closingTime : activeConversation.openingTime)} •</span>
+                                            <span>Site Engineer ({activeConversation.seName})</span>
+                                            <FontAwesomeIcon icon={faUserCircle} className="text-green-600 text-sm" />
+                                        </div>
+                                        <div className="bg-green-50 border border-green-100 rounded-2xl rounded-tr-none p-4 shadow-sm w-full">
+                                            <div className="space-y-3 text-left">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-green-700 uppercase tracking-wider mb-1">Site Engineer Remark</p>
+                                                    <p className="text-sm font-semibold text-gray-900 bg-white p-3 rounded-xl border border-green-100">
+                                                        {activeConversation.reworkRemark || 'Rework completed as per specifications.'}
+                                                    </p>
+                                                </div>
+                                                {activeConversation.seMediaUrls && activeConversation.seMediaUrls.length > 0 && (
+                                                    <div className="pt-1">
+                                                        <p className="text-[10px] font-black text-green-700 uppercase tracking-wider mb-1.5">Evidence Photos (Site Engineer Rework)</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {activeConversation.seMediaUrls.map((p, idx) => (
+                                                                <img
+                                                                    key={idx}
+                                                                    src={getImageUrl(p)}
+                                                                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm"
+                                                                    onClick={() => setZoomImage(getImageUrl(p))}
+                                                                    alt="Site Engineer evidence"
+                                                                    onError={(e) => { e.target.src = "https://via.placeholder.com/100?text=Error"; }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- IMAGE ZOOM MODAL --- */}
             {zoomImage && (
