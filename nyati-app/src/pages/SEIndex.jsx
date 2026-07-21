@@ -707,7 +707,7 @@ function SEIndex() {
 
   const downloadExcel = () => {
     if (reportData.length === 0) return alert('No data!')
-    const headers = ['Sr No', 'Date & Time (SE)', 'Date & Time (QE)', 'Location', 'Checklist', 'SE Name', 'QE Name', 'Remark']
+    const headers = ['Sr.No', 'Checklist', 'Check Point', 'Location', 'Site Engineer Name', 'Date & Time (Site Engineer)', 'Quality Engineer Name', 'Date & Time (Quality Engineer)', 'Remark']
 
     let srNo = 1;
     const body = reportData.flatMap(r =>
@@ -719,12 +719,13 @@ function SEIndex() {
 
         return [
           srNo++,
-          r.submittedAt || r.date,
-          r.updatedAt || '-',
-          `${r.block} | ${r.floor} | ${r.location}`,
           it.category,
+          it.question || it.questionText || '-',
+          `${r.block} | ${r.floor} | ${r.location}`,
           r.submittedBy,
+          r.submittedAt || r.date,
           r.qeName || '-',
+          r.updatedAt || '-',
           remark
         ].map(val => `"${val}"`).join(',');
       })
@@ -1546,29 +1547,54 @@ function SEIndex() {
             <>
               <div className="flex justify-between items-center mb-4">
                 <button onClick={() => setReportView('filter')} className="text-[#004080] font-bold text-xs">← Change Dates</button>
-                <button onClick={downloadExcel} className="flex items-center gap-2 bg-green-600 text-white text-[10px] font-black px-4 py-2 rounded-lg shadow"><FontAwesomeIcon icon={faUpload} /> Export Excel</button>
+                <button onClick={() => {}} className="flex items-center gap-2 bg-green-600 text-white text-[10px] font-black px-4 py-2 rounded-lg shadow"><FontAwesomeIcon icon={faUpload} /> Export Excel</button>
               </div>
 
               {reportData.length === 0 ? (
                 <div className="text-center py-16 text-gray-300 uppercase text-[10px] font-bold">No Records Found</div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                  <table className="w-full text-[9px] border-collapse">
+                  <table className="w-full text-[11px] font-medium border-collapse">
                     <thead>
-                      <tr className="bg-[#004080] text-white uppercase tracking-tighter">
-                        <th className="p-2 text-left border-r border-blue-700">Sr</th>
-                        <th className="p-2 text-left border-r border-blue-700">Date & Time (SE)</th>
-                        <th className="p-2 text-left border-r border-blue-700">Date & Time (QE)</th>
-                        <th className="p-2 text-left border-r border-blue-700">Location</th>
-                        <th className="p-2 text-left border-r border-blue-700">Checklist</th>
-                        <th className="p-2 text-left border-r border-blue-700">SE Name</th>
-                        <th className="p-2 text-left border-r border-blue-700">QE Name</th>
-                        <th className="p-2 text-left">Remark</th>
+                      <tr className="bg-[#004080] text-white uppercase tracking-wider text-[10px] leading-tight">
+                        <th className="p-2 text-center border-r border-blue-700 font-bold whitespace-nowrap">Sr.No</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold">Checklist</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold min-w-[120px]">Check<br />Point</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold">Location</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold min-w-[90px]">Site Engineer<br />Name</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold min-w-[100px]">Date & Time<br />(Site Engineer)</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold min-w-[90px]">Quality Engineer<br />Name</th>
+                        <th className="p-2 text-center border-r border-blue-700 font-bold min-w-[100px]">Date & Time<br />(Quality Engineer)</th>
+                        <th className="p-2 text-center font-bold">Remark</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y text-[11px] font-medium text-gray-800">
                       {(() => {
                         let srNo = 1;
+                        const formatDateTime = (val) => {
+                          if (!val || val === '-') return '-';
+                          const str = String(val);
+                          if (str.includes(',')) {
+                            const parts = str.split(',');
+                            return (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="whitespace-nowrap">{parts[0].trim()}</span>
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{parts.slice(1).join(',').trim()}</span>
+                              </div>
+                            );
+                          }
+                          if (str.includes(' ')) {
+                            const idx = str.indexOf(' ');
+                            return (
+                              <div className="flex flex-col items-center leading-tight">
+                                <span className="whitespace-nowrap">{str.slice(0, idx).trim()}</span>
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">{str.slice(idx + 1).trim()}</span>
+                              </div>
+                            );
+                          }
+                          return val;
+                        };
+
                         return reportData.flatMap((report, rIdx) =>
                           report.items.map((item, iIdx) => {
                             let remark = 'Pending';
@@ -1579,14 +1605,15 @@ function SEIndex() {
 
                             return (
                               <tr key={`${rIdx}-${iIdx}`} className={srNo % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                <td className="p-2 border-r">{srNo++}</td>
-                                <td className="p-2 border-r whitespace-nowrap">{report.submittedAt || report.date}</td>
-                                <td className="p-2 border-r whitespace-nowrap">{report.updatedAt || '-'}</td>
-                                <td className="p-2 border-r">{report.block} | {report.floor} | {report.location}</td>
-                                <td className="p-2 border-r font-bold text-[#004080]">{item.category}</td>
-                                <td className="p-2 border-r whitespace-nowrap">{report.submittedBy}</td>
-                                <td className="p-2 border-r whitespace-nowrap">{report.qeName || '-'}</td>
-                                <td className={`p-2 font-black ${remarkColor}`}>{remark}</td>
+                                <td className="p-2 border-r font-semibold text-gray-700 text-center">{srNo++}</td>
+                                <td className="p-2 border-r font-bold text-[#004080] text-center whitespace-normal min-w-[90px]">{item.category}</td>
+                                <td className="p-2 border-r font-medium text-gray-900 text-center min-w-[140px]">{item.question || item.questionText || '-'}</td>
+                                <td className="p-2 border-r font-medium text-gray-700 text-center min-w-[110px]">{report.block} | {report.floor} | {report.location}</td>
+                                <td className="p-2 border-r font-medium text-gray-800 text-center">{report.submittedBy}</td>
+                                <td className="p-2 border-r font-medium text-gray-700 text-center">{formatDateTime(report.submittedAt || report.date)}</td>
+                                <td className="p-2 border-r font-medium text-gray-800 text-center">{report.qeName || '-'}</td>
+                                <td className="p-2 border-r font-medium text-gray-700 text-center">{formatDateTime(report.updatedAt)}</td>
+                                <td className={`p-2 font-bold text-center whitespace-nowrap ${remarkColor}`}>{remark}</td>
                               </tr>
                             );
                           })
