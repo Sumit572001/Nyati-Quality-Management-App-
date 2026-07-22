@@ -138,7 +138,7 @@ function StatusSelector({ itemId, value, onChange, isPassed }) {
     const isSelected = value === opt;
     return (
       <div
-        onClick={() => { onChange(itemId, opt); setIsOpen(false); }}
+        onClick={() => { onChange(itemId, isSelected ? undefined : opt); setIsOpen(false); }}
         className={`cursor-pointer rounded-lg border p-2 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 min-w-[56px] ${isSelected
           ? `${bgColor} ${borderColor} shadow-sm scale-105`
           : 'bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200'
@@ -1089,8 +1089,8 @@ function SEIndex() {
           <button onClick={() => { setView('main'); setInspectionStep(2); }} className="mb-6 text-[#004080] font-bold text-sm"><FontAwesomeIcon icon={faArrowLeft} /> Back</button>
           <div className="space-y-6">
             {selectedCats.map((cat, ci) => (
-              <div key={ci} className="border rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-[#004080] text-white p-4 font-black text-[12px] uppercase">
+              <div key={ci} className="border rounded-2xl shadow-sm">
+                <div className="bg-[#004080] text-white p-4 font-black text-[12px] uppercase rounded-t-2xl">
                   <span>{cat.name}</span>
                 </div>
                 <div className="p-4 space-y-8 bg-gray-50">
