@@ -1,0 +1,8 @@
+{
+  "appId": "com.nyati.qualityapp",
+  "appName": "Nyati Quality App",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
